@@ -9,7 +9,6 @@ import uuid
 import argparse
 import random
 import sys
-#Import the beautiful soup python library to parse HTML files
 
 class pythonAgent(): 
 
@@ -142,24 +141,24 @@ class pythonAgent():
                 print(f"[-] Failed to send results: {e}") 
 
 if __name__ == "__main__": 
-    #Check the length of the inputted arguements to catch for potential erorrs
-    if len(sys.argv) == 1:
-        parser = argparse.ArgumentParser(
-            description='Python Agent for C2 Communication',
-            formatter_class=argparse.RawDescriptionHelpFormatter,
-            epilog='''
+    parser = argparse.ArgumentParser(
+        description='Python Agent for C2 Communication',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog='''
 Examples:
   python agent.py --domain http://127.0.0.1:5000 --endpoint /results
   python agent.py -d https://example.com -e /api/results --min-interval 5 --max-interval 15
-            '''
-        )
-        parser.add_argument('--domain', '-d', required=True, help='Domain URL for the C2 server (e.g., http://127.0.0.1:5000)')
-        parser.add_argument('--endpoint', '-e', required=True, help='Endpoint path for communication (e.g., /results)')
-        parser.add_argument('--min-interval', type=int, default=5, help='Minimum interval between runs in seconds (default: 5)')
-        parser.add_argument('--max-interval', type=int, default=30, help='Maximum interval between runs in seconds (default: 30)')
+        '''
+    )
+    parser.add_argument('--domain', '-d', required=True, help='Domain URL for the C2 server (e.g., http://127.0.0.1:5000)')
+    parser.add_argument('--endpoint', '-e', required=True, help='Endpoint path for communication (e.g., /results)')
+    parser.add_argument('--min-interval', type=int, default=5, help='Minimum interval between runs in seconds (default: 5)')
+    parser.add_argument('--max-interval', type=int, default=30, help='Maximum interval between runs in seconds (default: 30)')
+    
+    #Check the length of the inputted arguements to catch for potential erorrs
+    if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
-    
 
     #Obtain the args 
     args = parser.parse_args()

@@ -71,5 +71,5 @@ def reassemble(list_key):
 
 if __name__ == "__main__":
     # make sure you define KEY above if using app‑layer AES
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=80, debug=True)
 

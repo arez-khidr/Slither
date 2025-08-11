@@ -69,7 +69,7 @@ def reassemble(list_key):
     message = b"".join(parts)
     return base64.b64decode(message) 
 
-if __name__ == "__main__":
-    # make sure you define KEY above if using app‑layer AES
-    app.run(host="0.0.0.0", port=80, debug=True)
+# if __name__ == "__main__":
+#     # make sure you define KEY above if using app‑layer AES
+#     app.run(host="0.0.0.0", port=80, debug=True)
 

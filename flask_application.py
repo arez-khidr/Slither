@@ -23,6 +23,9 @@ class FlaskApplication:
         os.makedirs(template_folder, exist_ok=True)
         
         app = Flask(__name__, template_folder=template_folder)
+
+        # Create a basic index.html inside of the folder if it does not exist 
+        self._create_index_html()
         
         # Domain-specific configuration
         app.config.update({
@@ -100,6 +103,26 @@ class FlaskApplication:
         # Combine all the parts
         message = b"".join(parts)
         return base64.b64decode(message)
+    
+    def _create_index_html(self): 
+        """
+        Function that creates a simple index.html page if it does not already exist for an application
+        """
+        template_folder = f"templates/{self.domain}"
+        index_file_path = os.path.join(template_folder, 'index.html')
+        
+        if not os.path.exists(index_file_path):
+            basic_html = f"""
+        <html>
+            <body>
+                <h1>{{{{ domain }}}} - Flask Application</h1>
+                <p>This is the domain-specific template for: <strong>{{{{ domain }}}}</strong></p>
+                <p>Generated automatically for {self.domain}</p>
+            </body>
+        </html>"""
+            with open(index_file_path, 'w') as f:
+                f.write(basic_html)
+
     
     def get_app(self):
         """Return the Flask app instance for use with WSGI servers"""

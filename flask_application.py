@@ -116,7 +116,7 @@ class FlaskApplication:
         <html>
             <body>
                 <h1>{{{{ domain }}}} - Flask Application</h1>
-                <p>This is the domain-specific template for: <strong>{{{{ domain }}}}</strong></p>
+                <p>This is the domain-specific template for: <strong>{ self.domain }</strong></p>
                 <p>Generated automatically for {self.domain}</p>
             </body>
         </html>"""

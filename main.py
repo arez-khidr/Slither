@@ -8,6 +8,8 @@ class PyWebC2Shell(cmd.Cmd):
     def __init__(self):
         super().__init__()
         self.dorch = DomainOrchestrator()
+        #Reload all of the previously stored applications 
+        self.dorch.startup_applications()
     
     def do_create(self, line):
         """Create a new domain: create <domain_name> [port]"""
@@ -49,11 +51,13 @@ class PyWebC2Shell(cmd.Cmd):
         self.dorch.resume_domain(line.strip())
     
     def do_exit(self, line):
-        """Exit the shell"""
+        """Exit the shell and save all of the items"""
+        self.dorch.shutdown_applications()
         return True
     
     def do_quit(self, line):
         """Exit the shell"""
+        self.dorch.shutdown_applications()
         return True
 
 def main():

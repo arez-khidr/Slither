@@ -5,6 +5,7 @@ import socket
 import subprocess
 import os
 import shutil 
+import json
 from datetime import datetime
 
 class DomainOrchestrator(): 
@@ -165,19 +166,49 @@ class DomainOrchestrator():
 
     def shutdown_applications(self): 
         """shutdown all of the current running applications and store them inside of a json file"""
-        for domain in self.domainDictionary: 
-            pass 
+        # Iterate through all of the domains inside of the domain dictionary 
+        for domain, (port, pid, status, date_created) in self.domainDictionary.items(): 
+            #Pause the domain if it is not already paused 
+            if status != "paused": 
+                self.pause_domain(domain)
         
-        #Iterate through all of the domains in the domain dictionary 
-            #For each 
-            # Run the Pause application ;w
+        #Store the dictionary inside of a json file 
+        self._store_domains()
 
-    
+        return True 
+             
     def startup_applications(self):
         """Can be called by the user to return all of the applications that were previously saved""" 
+        #TODO: If a process was previously running when it was shutdown, it should also be started up once hte application goes on again 
+        #Load the domains.json file into a dictionary 
+        if self._load_domains(): 
+            return True
+
+        #Otherwise no applications were able to be started up so return false 
+        return False
+
+    def _load_domains(self): 
+        """Loads all of the previously stored domains from the domains.json file into the dictionary"""
+        try:
+            with open('domains.json', 'r') as f:
+                self.domainDictionary = json.load(f)
+            print("Domain configuration loaded from domains.json")
+            return True
+        except FileNotFoundError:
+            print("No previous domain configuration found (domains.json not found)")
+            return False
+        except Exception as e:
+            print(f"Error loading domains: {e}")
+            return False
 
     def _store_domains(self): 
         """Stores all of the domains in a json for future usage"""
+        try:
+            with open('domains.json', 'w') as f:
+                json.dump(self.domainDictionary, f, indent=2)
+            print("Domain configuration saved to domains.json")
+        except Exception as e:
+            print(f"Error saving domains: {e}")
 
 
     def is_port_available(self, port):
@@ -194,8 +225,9 @@ class DomainOrchestrator():
         # First check if we're already using this port internally (connected to a domain, whether in use or not )
         ports_in_use = [port for port, _, _, _ in self.domainDictionary.values()]
 
+        #TODO: Make the message that comes if the port is reserved by the application that is trying to start it a bit clearer 
         if port in ports_in_use: 
-            print(f"{port} is currently in use")
+            print(f"{port} is currently in use by the ")
 
         # Since that passed, now double check if port is available system-wide using socket
         try:
@@ -220,9 +252,4 @@ class DomainOrchestrator():
             if self.is_port_available(port):
                 return port
         return None
-
-    def _save_domains(self): 
-        # Saves the domain that
-        pass 
-
 

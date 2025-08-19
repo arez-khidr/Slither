@@ -32,15 +32,13 @@ class DomainOrchestrator:
 
     # TODO: Have it such that the user just inputs an entire FQDN and we parse out the other components?? (We parse components for naming purposes)
     # AS what would I do in the isntance of a subdomain 1
-    def create_domain(
-        self, domain_name: str, top_level_domain: str, preferred_port=None
-    ):
+    def create_domain(self, domain: str, top_level_domain: str, preferred_port=None):
         """
         Completes all the set up for a provided domain, including the flask application, WSGI server,
         and adding routing to nginx
 
         Args:
-            domain_name - The name of the domain (ex. google, twitch)
+            domain - The name of the domain (ex. google, twitch)
             top_level_domain - The top level domain (ex. .com, .tv)
             preferred_port - Optional preferred port (will find available if not provided or unavailable)
 
@@ -48,14 +46,14 @@ class DomainOrchestrator:
             tuple: (success: bool, port: int, message: str)
         """
         # Check if domain already exists
-        if domain_name in self.domainDictionary:
+        if domain in self.domainDictionary:
             print(
                 "Domain provided already is in use, shut down the server running that domain or provide a different domain"
             )
             return False
 
         # Find an available port
-        if preferred_port and self.is_port_available(preferred_port):
+        if preferred_port and self.is_port_available(preferred_port, domain):
             port = preferred_port
         else:
             port = self.find_available_port()
@@ -66,7 +64,7 @@ class DomainOrchestrator:
         try:
             print("Inside of the domain try ")
             # Create the flask application corresponding to the domain
-            flask_application = FlaskApplication(domain_name)
+            flask_application = FlaskApplication(domain)
             app = flask_application.get_app()
 
             # Create a corresponding WSGI server in a new file
@@ -74,24 +72,24 @@ class DomainOrchestrator:
 
             # Update the nginx.conf file as well in reference
             nginx_controller = NGINXController()
-            nginx_controller.add_NGINX_path(domain_name, port)
+            nginx_controller.add_NGINX_path(domain, port)
 
             # Store the domain information in our domain dictionary if successfull
-            self.domainDictionary[domain_name] = (
+            self.domainDictionary[domain] = (
                 port,
                 pid,
                 "running",
                 datetime.now().isoformat(),
             )
 
-            print(f"Domain '{domain_name}' created successfully on port {port}")
+            print(f"Domain '{domain}' created successfully on port {port}")
             return True
 
         except Exception as e:
             # Clean up on failure
-            if domain_name in self.domainDictionary:
-                self.domainDictionary.pop(domain_name)
-            print(f"Failed to create domain '{domain_name}': {str(e)}")
+            if domain in self.domainDictionary:
+                self.domainDictionary.pop(domain)
+            print(f"Failed to create domain '{domain}': {str(e)}")
             return False
 
     def remove_domain(self, domain):
@@ -162,7 +160,7 @@ class DomainOrchestrator:
             return False
 
         # Check if port is still available
-        if not self.is_port_available(port):
+        if not self.is_port_available(port, domain):
             print(f"Port {port} is no longer available for domain '{domain}'")
             return False
 
@@ -195,7 +193,9 @@ class DomainOrchestrator:
         """Can be called by the user to return all of the applications that were previously saved"""
         # TODO: If a process was previously running when it was shutdown, it should also be started up once hte application goes on again
         # Load the domains.json file into a dictionary
+
         if self._load_domains():
+            # Startup all the domains that were previously running on shutdown
             return True
 
         # Otherwise no applications were able to be started up so return false
@@ -224,25 +224,28 @@ class DomainOrchestrator:
         except Exception as e:
             print(f"Error saving domains: {e}")
 
-    def is_port_available(self, port):
+    def is_port_available(self, port, domain=None):
         """
         Check if a port is available by testing both system-wide usage
         and our internal WSGI server tracking
 
         Args:
+            domain (str): Domain that we are currently checking this for.
             port (int): Port number to check
 
         Returns:
             bool: True if port is available, False otherwise
         """
-        # First check if we're already using this port internally (connected to a domain, whether in use or not )
-        ports_in_use = [port for port, _, _, _ in self.domainDictionary.values()]
+        # Check if port is already used by our domains
+        for existing_domain, (existing_port, _, _, _) in self.domainDictionary.items():
+            if existing_port == port:
+                # If a different domain is using this port, it's not available
+                if not domain or existing_domain != domain:
+                    print(f"Port {port} is currently in use by domain '{existing_domain}'")
+                    return False
+                # If same domain, continue to bind test below
 
-        # TODO: Make the message that comes if the port is reserved by the application that is trying to start it a bit clearer
-        if port in ports_in_use:
-            print(f"{port} is currently in use by the ")
-
-        # Since that passed, now double check if port is available system-wide using socket
+        # Check if port is available system-wide using socket
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.bind(("127.0.0.1", port))

@@ -48,9 +48,32 @@ class PyWebC2Shell:
         """Remove a domain: remove <domain>"""
         self.dorch.remove_domain(domain)
 
-    def list(self):
-        """List all active domains"""
-        print("Active domains:", self.dorch.domainDictionary)
+    def list(
+        self,
+        active: Annotated[
+            bool,
+            typer.Option(
+                help="Show all of the active domains with broadcasting streams"
+            ),
+        ] = False,
+        paused: Annotated[
+            bool,
+            typer.Option(help="Show all of the paused domains"),
+        ] = False,
+    ):
+        """Lists all domains: list"""
+        if active:
+            self.dorch.print_domains(self.dorch.get_running_domains())
+            return
+
+        if paused:
+            self.dorch.print_domains(self.dorch.get_paused_domains())
+            return
+
+        all_domains = [
+            (domain, info) for domain, info in self.dorch.get_all_domains().items()
+        ]
+        self.dorch.print_domains(all_domains)
 
     def pause(self, domain: str):
         """Pause a running domain: pause <domain>"""
@@ -64,45 +87,29 @@ class PyWebC2Shell:
         """Runs the typer app as we are calling it inside of a class"""
         self.app()
 
-    def listen(self, domain):
-        """listens to a broadcasting redis stream in order to obtain messages for a specific domain"""
-
+    def listen(
+        self,
+        domain: str,
+    ):
+        """Listens to a broadcast stream in order to obtain messages for a specific domain"""
         # List the available streams to lisen to, these are all active domains that are currently running
-        available_streams = [
-            domain
-            for domain, (
-                _,
-                _,
-                status,
-                _,
-            ) in self.dorch.domainDictionary.items()
-            if status == "running"
-        ]
+        available_streams = [domain for domain, _ in self.dorch.get_running_domains()]
 
-        # Append the all stream to the list of the available streams if more than two streams exist
-        #         if len(available_streams) > 2:
-        #             available_streams.append("all")
-        #
-        #         # Flag that lists all of hte available streams
-        # #        if args[0] == "-l":
-        #             if available_streams:
-        #                 print(*available_streams, sep="\n")
-        #                 return
-        #             else:
-        #                 print(
-        #                     "No active domains. Use 'create <domain>' to create a domain or resume <domain> to resume a previous isntance"
-        #                 )
-        #                 return
-        #
-        #         # Flag that can be used to access the log of a given stream
-        #         if args[0] == "-h":
-        #             if args[1] in available_streams:
-        #                 pass
-        #             else:
-        #                 print(
-        #                     f"{args[1]}, is not a valid stream, Syntax is listen -h <channel>"
-        #                 )
-        #
+        # Append the 'all' stream, this is a stream that all domains also send their information to
+        if available_streams:
+            available_streams.append("all")
+        else:
+            print(
+                "There are no current broadcast streams available to run, please create or resume one"
+            )
+
+        # Ensure that the domain provided is a domain that is an available stream
+        if domain not in available_streams:
+            print(
+                "ERROR: Domain provided is not an available domain use the list --available command to see all available streams"
+            )
+            return
+
         # After these checks, it is assumed that the user passed in a domain to check, so:
         stream_name = domain
         print(f"Listening to stream '{stream_name}'. Press Ctrl+C to stop.")

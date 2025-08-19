@@ -206,7 +206,7 @@ class DomainOrchestrator:
         try:
             with open("domains.json", "r") as f:
                 self.domainDictionary = json.load(f)
-            print("Domain configuration loaded from domains.json")
+            # print("Domain configuration loaded from domains.json")
             return True
         except FileNotFoundError:
             print("No previous domain configuration found (domains.json not found)")

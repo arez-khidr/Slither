@@ -114,6 +114,11 @@ class PyWebC2Shell:
         stream_name = domain
         print(f"Listening to stream '{stream_name}'. Press Ctrl+C to stop.")
 
+        # Save the original SIGINT handler
+        original_sigint_handler = signal.signal(
+            signal.SIGINT, signal.default_int_handler
+        )
+
         try:
             last_id = "$"  # Start from new messages only
             while True:
@@ -130,7 +135,10 @@ class PyWebC2Shell:
                             last_id = msg_id
 
         except KeyboardInterrupt:
-            print(f"\nStopped listening to Redis stream '{stream_name}'")
+            print(f"\nStopped listening to broadcast stream '{stream_name}'")
+        finally:
+            # Restore the original SIGINT handler
+            signal.signal(signal.SIGINT, original_sigint_handler)
 
     ## Functions for the graceful shutting down of the application in the case of an error ##
 

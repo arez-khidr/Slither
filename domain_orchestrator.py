@@ -83,6 +83,7 @@ class DomainOrchestrator:
             )
 
             print(f"Domain '{domain}' created successfully on port {port}")
+            self._store_domains()
             return True
 
         except Exception as e:
@@ -123,6 +124,7 @@ class DomainOrchestrator:
         del self.domainDictionary[domain]
 
         print(f"Domain '{domain}' removed successfully")
+        self._store_domains()
         return True
 
     def pause_domain(self, domain, resume: bool = False):
@@ -152,6 +154,7 @@ class DomainOrchestrator:
             self.domainDictionary[domain] = (port, None, "paused", date_created)
 
         print(f"Domain '{domain}' paused successfully")
+        self._store_domains()
         return True
 
     def resume_domain(self, domain):
@@ -178,11 +181,13 @@ class DomainOrchestrator:
             # Update metadata back to running state
             self.domainDictionary[domain] = (port, new_pid, "running", date_created)
             print(f"Domain '{domain}' resumed successfully on port {port}")
+            self._store_domains()
             return True
         else:
             print(f"Failed to resume domain '{domain}'")
             # In this case, if we failed to resume on startup, we should also modify the status to paused
             self.domainDictionary[domain] = (port, new_pid, "paused", date_created)
+            self._store_domains()
             return False
 
     def shutdown_domains(self):

@@ -8,6 +8,7 @@ from typing_extensions import Annotated
 import signal
 import atexit
 import sys
+import threading
 
 
 class PyWebC2Shell:
@@ -83,10 +84,6 @@ class PyWebC2Shell:
         """Resume a paused domain: resume <domain>"""
         self.dorch.resume_domain(domain)
 
-    def run(self):
-        """Runs the typer app as we are calling it inside of a class"""
-        self.app()
-
     def listen(
         self,
         domain: str,
@@ -114,10 +111,8 @@ class PyWebC2Shell:
         stream_name = domain
         print(f"Listening to stream '{stream_name}'. Press Ctrl+C to stop.")
 
-        # Save the original SIGINT handler
-        original_sigint_handler = signal.signal(
-            signal.SIGINT, signal.default_int_handler
-        )
+        # Save the original SIGINT handler and temporarily replace with default
+        original_sigint_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
 
         try:
             last_id = "$"  # Start from new messages only
@@ -139,6 +134,11 @@ class PyWebC2Shell:
         finally:
             # Restore the original SIGINT handler
             signal.signal(signal.SIGINT, original_sigint_handler)
+
+
+    def run(self):
+        """Runs the typer app as we are calling it inside of a class"""
+        self.app()
 
     ## Functions for the graceful shutting down of the application in the case of an error ##
 

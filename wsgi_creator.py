@@ -25,7 +25,8 @@ def create_wsgi_server(app, port, workers=4):
     process = subprocess.Popen(
         ['python', wsgi_file_path],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
+        stderr=subprocess.PIPE,
+        start_new_session=True
     )
     
     print(f"WSGI server started for {domain} on port {port} (PID: {process.pid})")
@@ -91,7 +92,8 @@ def restart_server(domain):
     process = subprocess.Popen(
         ['python', wsgi_file_path],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
+        stderr=subprocess.PIPE,
+        start_new_session=True
     )
     
     print(f"Restarted server for {domain} (PID: {process.pid})")

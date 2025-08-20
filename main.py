@@ -11,6 +11,8 @@ import sys
 import threading
 from datetime import datetime
 
+# TODO: Add the rich help panel for functions that have different arguements: https://typer.tiangolo.com/tutorial/options/help/#cli-options-help-panels
+
 
 class PyWebC2Shell:
     def __init__(self) -> None:
@@ -31,7 +33,7 @@ class PyWebC2Shell:
         self.app.command()(self.list)
         self.app.command()(self.pause)
         self.app.command()(self.resume)
-        self.app.command()(self.listen)
+        self.app.command()(self.read)
 
     def create(
         self,
@@ -41,13 +43,13 @@ class PyWebC2Shell:
             typer.Option(help="The port number you would like the domain to run from"),
         ] = 8000,
     ):
-        """Create a new domain: create <domain> [port]"""
+        """Create a new domain"""
         print("Usage: create <domain> [port]")
 
         self.dorch.create_domain(domain, ".com", port)
 
     def remove(self, domain: str):
-        """Remove a domain: remove <domain>"""
+        """Remove a domain"""
         self.dorch.remove_domain(domain)
 
     def list(
@@ -63,7 +65,7 @@ class PyWebC2Shell:
             typer.Option(help="Show all of the paused domains"),
         ] = False,
     ):
-        """Lists all domains: list"""
+        """Lists domains"""
         if active:
             self.dorch.print_domains(self.dorch.get_running_domains())
             return
@@ -78,18 +80,32 @@ class PyWebC2Shell:
         self.dorch.print_domains(all_domains)
 
     def pause(self, domain: str):
-        """Pause a running domain: pause <domain>"""
+        """Pause a domain"""
         self.dorch.pause_domain(domain)
 
     def resume(self, domain: str):
-        """Resume a paused domain: resume <domain>"""
+        """Resume a paused domain"""
         self.dorch.resume_domain(domain)
 
-    def listen(
+    # TODO: Add the functionality in read to write outputs to another file
+    # TODO: Implement the History functionality as well
+    def read(
         self,
         domain: str,
+        listen: Annotated[
+            bool,
+            typer.Option(
+                help="Listen and display any new messages that are sent to the domain"
+            ),
+        ] = True,
+        history: Annotated[
+            int,
+            typer.Option(
+                help="Shows the n most previous messages that were sent, by default this sends an entire log"
+            ),
+        ] = 0,
     ):
-        """Listens to a broadcast stream in order to obtain messages for a specific domain"""
+        """Reads from a broadcast stream in order to obtain messages for a specific domain"""
         # List the available streams to lisen to, these are all active domains that are currently running
         available_streams = [domain for domain, _ in self.dorch.get_running_domains()]
 
@@ -110,41 +126,44 @@ class PyWebC2Shell:
 
         # After these checks, it is assumed that the user passed in a domain to check, so:
         stream_name = domain
-        print(f"Listening to stream '{stream_name}'. Press Ctrl+C to stop.")
 
-        # Save the original SIGINT handler and temporarily replace with default
-        original_sigint_handler = signal.signal(signal.SIGINT, signal.default_int_handler)
+        if listen:
+            # Save the original SIGINT handler and temporarily replace with default
+            original_sigint_handler = signal.signal(
+                signal.SIGINT, signal.default_int_handler
+            )
 
-        try:
-            last_id = "$"  # Start from new messages only
-            while True:
-                # Get new messages from the stream
-                messages = self.redis_client.xread(
-                    {stream_name: last_id}, count=1, block=1000
-                )
+            try:
+                last_id = "$"  # Start from new messages only
+                while True:
+                    # Get new messages from the stream
+                    messages = self.redis_client.xread(
+                        {stream_name: last_id}, count=1, block=1000
+                    )
 
-                if messages:
-                    for stream, msgs in messages:  # type: ignore
-                        for msg_id, fields in msgs:
-                            # Extract message data, timestamp, and domain
-                            message_data = fields[b"message"].decode("utf-8")
-                            timestamp = float(fields[b"ts"].decode("utf-8"))
-                            domain = fields[b"domain"].decode("utf-8")
-                            
-                            # Format timestamp
-                            formatted_time = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
-                            
-                            # Display with timestamp and domain
-                            print(f"[{formatted_time}] [{domain}] {message_data}")
-                            
-                            last_id = msg_id
+                    if messages:
+                        for stream, msgs in messages:  # type: ignore
+                            for msg_id, fields in msgs:
+                                # Extract message data, timestamp, and domain
+                                message_data = fields[b"message"].decode("utf-8")
+                                timestamp = float(fields[b"ts"].decode("utf-8"))
+                                domain = fields[b"domain"].decode("utf-8")
 
-        except KeyboardInterrupt:
-            print(f"\nStopped listening to broadcast stream '{stream_name}'")
-        finally:
-            # Restore the original SIGINT handler
-            signal.signal(signal.SIGINT, original_sigint_handler)
+                                # Format timestamp
+                                formatted_time = datetime.fromtimestamp(
+                                    timestamp
+                                ).strftime("%Y-%m-%d %H:%M:%S")
 
+                                # Display with timestamp and domain
+                                print(f"[{formatted_time}] [{domain}] {message_data}")
+
+                                last_id = msg_id
+
+            except KeyboardInterrupt:
+                print(f"\nStopped listeningto broadcast stream '{stream_name}'")
+            finally:
+                # Restore the original SIGINT handler
+                signal.signal(signal.SIGINT, original_sigint_handler)
 
     def run(self):
         """Runs the typer app as we are calling it inside of a class"""

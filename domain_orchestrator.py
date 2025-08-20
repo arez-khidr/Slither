@@ -125,8 +125,12 @@ class DomainOrchestrator:
         print(f"Domain '{domain}' removed successfully")
         return True
 
-    def pause_domain(self, domain):
-        """Stops a server as it is currently running, however the metadata persists so it can be restarted"""
+    def pause_domain(self, domain, resume: bool = False):
+        """Stops a server as it is currently running, however the metadata persists so it can be restarted
+
+        Args:
+            domain: Domain to be paused
+            resume: Bool, set to True if the domain that w are pausing should be given the resume status rather than the paused status"""
         if domain not in self.domainDictionary:
             print(f"Domain '{domain}' not found")
             return False
@@ -141,8 +145,11 @@ class DomainOrchestrator:
         if pid and is_server_running(pid):
             stop_server_by_pid(pid, domain)
 
-        # Update metadata to paused state (keep port reserved, clear PID)
-        self.domainDictionary[domain] = (port, None, "paused", date_created)
+        if resume:
+            self.domainDictionary[domain] = (port, None, "resume", date_created)
+        # Upkdate metadata to paused state (keep port reserved, clear PID)
+        else:
+            self.domainDictionary[domain] = (port, None, "paused", date_created)
 
         print(f"Domain '{domain}' paused successfully")
         return True
@@ -155,7 +162,7 @@ class DomainOrchestrator:
 
         port, pid, status, date_created = self.domainDictionary[domain]
 
-        if status != "paused":
+        if status != "paused" and status != "resume":
             print(f"Domain '{domain}' is not paused (status: {status})")
             return False
 
@@ -174,28 +181,39 @@ class DomainOrchestrator:
             return True
         else:
             print(f"Failed to resume domain '{domain}'")
+            # In this case, if we failed to resume on startup, we should also modify the status to paused
+            self.domainDictionary[domain] = (port, new_pid, "paused", date_created)
             return False
 
-    def shutdown_applications(self):
-        """shutdown all of the current running applications and store them inside of a json file"""
+    def shutdown_domains(self):
+        """shutdown all of the current running domains and store them inside of a json file"""
         # Iterate through all of the domains inside of the domain dictionary
         for domain, (port, pid, status, date_created) in self.domainDictionary.items():
             # Pause the domain if it is not already paused
             if status != "paused":
-                self.pause_domain(domain)
+                self.pause_domain(domain, resume=True)
 
         # Store the dictionary inside of a json file
         self._store_domains()
 
         return True
 
-    def startup_applications(self):
+    def startup_domains(self):
         """Can be called by the user to return all of the applications that were previously saved"""
         # TODO: If a process was previously running when it was shutdown, it should also be started up once hte application goes on again
         # Load the domains.json file into a dictionary
 
         if self._load_domains():
             # Startup all the domains that were previously running on shutdown
+            for domain, (
+                _,
+                _,
+                status,
+                _,
+            ) in self.domainDictionary.items():
+                if status == "resume":
+                    self.resume_domain(domain)
+
             return True
 
         # Otherwise no applications were able to be started up so return false
@@ -241,7 +259,9 @@ class DomainOrchestrator:
             if existing_port == port:
                 # If a different domain is using this port, it's not available
                 if not domain or existing_domain != domain:
-                    print(f"Port {port} is currently in use by domain '{existing_domain}'")
+                    print(
+                        f"Port {port} is currently in use by domain '{existing_domain}'"
+                    )
                     return False
                 # If same domain, continue to bind test below
 

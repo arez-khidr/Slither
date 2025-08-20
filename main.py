@@ -20,7 +20,7 @@ class PyWebC2Shell:
         self.monitoring = False
         self.monitor_thread = None
         # Reload all of the previously stored applications
-        self.dorch.startup_applications()
+        self.dorch.startup_domains()
         # Register the shutdown handlers
         self._register_shutdown_handlers()
         # NOTE: Any new commands that are added MUST be registered here otherwise they will not run
@@ -155,7 +155,7 @@ class PyWebC2Shell:
         """Cleanup function called on exit"""
         try:
             print("\nPerforming graceful shutdown...")
-            self.dorch.shutdown_applications()
+            self.dorch.shutdown_domains()
             print("Shutdown complete.")
         except Exception as e:
             print(f"Error during shutdown: {e}")

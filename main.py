@@ -9,6 +9,7 @@ import signal
 import atexit
 import sys
 import threading
+from datetime import datetime
 
 
 class PyWebC2Shell:
@@ -125,8 +126,17 @@ class PyWebC2Shell:
                 if messages:
                     for stream, msgs in messages:  # type: ignore
                         for msg_id, fields in msgs:
+                            # Extract message data, timestamp, and domain
                             message_data = fields[b"message"].decode("utf-8")
-                            print(f"[{stream_name}] {message_data}")
+                            timestamp = float(fields[b"ts"].decode("utf-8"))
+                            domain = fields[b"domain"].decode("utf-8")
+                            
+                            # Format timestamp
+                            formatted_time = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+                            
+                            # Display with timestamp and domain
+                            print(f"[{formatted_time}] [{domain}] {message_data}")
+                            
                             last_id = msg_id
 
         except KeyboardInterrupt:

@@ -1,7 +1,7 @@
 from flask_application import FlaskApplication
 from wsgi_creator import (
     create_wsgi_server,
-    stop_server_by_pid,
+    stop_server_by_port,
     is_server_running,
     restart_server,
     delete_wsgi_files,
@@ -104,7 +104,7 @@ class DomainOrchestrator:
 
         # Stop the WSGI server if running
         if status == "running" and is_server_running(pid):
-            stop_server_by_pid(pid, domain)
+            stop_server_by_port(port, domain)
 
         # Remove nginx configuration
         nginx_controller = NGINXController()
@@ -145,7 +145,7 @@ class DomainOrchestrator:
 
         # Stop the server process
         if pid and is_server_running(pid):
-            stop_server_by_pid(pid, domain)
+            stop_server_by_port(port, domain)
 
         if resume:
             self.domainDictionary[domain] = (port, None, "resume", date_created)

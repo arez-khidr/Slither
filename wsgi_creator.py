@@ -5,7 +5,7 @@ import signal
 
 
 # NOTE: When proceesses are created for the wsgi servers. all utilize the start_new_session = true to create them as separate(and not child processes)
-def create_wsgi_server(app, port, workers=4):
+def create_wsgi_server(app, port, workers=8):
     """
     Create a domain-specific WSGI server
 
@@ -36,24 +36,45 @@ def create_wsgi_server(app, port, workers=4):
     return process.pid
 
 
-def stop_server_by_pid(pid, domain=None):
+def stop_server_by_port(port, domain=None):
     """
-    Stop a WSGI server by process ID
+    Stop all processes using a specific port
 
     Args:
-        pid: Process ID to terminate
+        port: Port number to clear
         domain: Domain name (for logging purposes)
     """
     try:
-        # Try graceful termination first
-        os.kill(pid, signal.SIGTERM)
-        print(f"Stopped server{' for ' + domain if domain else ''} (PID: {pid})")
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"], capture_output=True, text=True
+        )
+
+        if result.returncode == 0 and result.stdout.strip():
+            pids = result.stdout.strip().split("\n")
+            killed_count = 0
+
+            for pid in pids:
+                try:
+                    os.kill(int(pid), signal.SIGTERM)
+                    killed_count += 1
+                    print(f"Killed process {pid} using port {port}")
+                except (ProcessLookupError, ValueError):
+                    continue
+
+            if killed_count > 0:
+                print(
+                    f"Cleared {killed_count} processes from port {port}{' for ' + domain if domain else ''}"
+                )
+                return True
+
+        print(f"No processes found using port {port}")
         return True
-    except ProcessLookupError:
-        print(f"Process {pid} not found{' for domain ' + domain if domain else ''}")
+
+    except FileNotFoundError:
+        print("lsof command not found - cannot kill processes by port")
         return False
-    except PermissionError:
-        print(f"Permission denied stopping process {pid}")
+    except Exception as e:
+        print(f"Error stopping processes on port {port}: {e}")
         return False
 
 
@@ -142,7 +163,7 @@ if __name__ == "__main__":
         'gunicorn',
         '--bind', '127.0.0.1:{port}',
         '--workers', '{workers}',
-        '--timeout', '30',
+        '--timeout', '10',
         '--max-requests', '1000',
         '--access-logfile', '-',
         '--error-logfile', '-',
@@ -155,4 +176,3 @@ if __name__ == "__main__":
     wsgi_file_path = f"wsgi/wsgi_{domain}.py"
     with open(wsgi_file_path, "w") as f:
         f.write(wsgi_content)
-

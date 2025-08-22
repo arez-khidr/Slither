@@ -97,11 +97,14 @@ class FlaskApplication:
                     result.decode("utf-8") if isinstance(result, bytes) else str(result)
                 )
                 self.redis_client.xadd(
-                    stream_key, {"ts": time(), "domain": self.domain, "message": result_str}
+                    stream_key,
+                    {"ts": time(), "domain": self.domain, "message": result_str},
                 )
 
                 # Also publish the message to the all stream
-                self.redis_client.xadd("all", {"ts": time(), "domain": self.domain, "message": result_str})
+                self.redis_client.xadd(
+                    "all", {"ts": time(), "domain": self.domain, "message": result_str}
+                )
 
             # Return status required for Flask
             return jsonify(status="ok"), 200

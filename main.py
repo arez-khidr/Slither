@@ -16,6 +16,7 @@ import command as c
 from datetime import datetime
 
 # TODO: Add the rich help panel for functions that have different arguements: https://typer.tiangolo.com/tutorial/options/help/#cli-options-help-panels
+# TODO: At some point, it could be valuable to create a separate redis manager class with a single client, but for now, leave it and keep goign
 
 
 class PyWebC2Shell:
@@ -39,6 +40,7 @@ class PyWebC2Shell:
         self.app.command()(self.resume)
         self.app.command()(self.read)
         self.app.command()(self.command)
+        self.app.command()(self.queue)
 
     def create(
         self,
@@ -91,6 +93,23 @@ class PyWebC2Shell:
     def resume(self, domain: str):
         """Resume a paused domain"""
         self.dorch.resume_domain(domain)
+
+    def queue(self, domain: str, commands: str):
+        """Takes a command, or a list of commands and queues them for a given domain"""
+
+        if domain not in self.dorch.get_all_domains():
+            print(
+                "ERROR: Domain provided is not an available domain, use the list command to see all domains "
+            )
+        if domain not in self.dorch.get_running_domains():
+            print(
+                "WARNING: The domain that this command is queued to is not actively running"
+            )
+        # Get all of hte commands
+        command_list = commands.split(",")
+        print(command_list)
+        if c.queue_commands(domain, self.redis_client, command_list):
+            print(f"SUCCESS: Commands:{command_list} sucessfully queued")
 
     def command(self, domain: str, command: str):
         """Insert an HTML comment as a command into a domain"""

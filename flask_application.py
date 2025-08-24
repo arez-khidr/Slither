@@ -6,6 +6,9 @@ import os
 
 # TODO Make it such that the redis logs clear after a bit, make a flag that can be set when the domain is created as well
 
+# NOTE: Inspired by sliver and how they utilize different file extensions and endpoints to configure different commands, we do the same here. Below is our structure
+
+
 
 class FlaskApplication:
     """
@@ -45,6 +48,8 @@ class FlaskApplication:
     def _setup_routes(self):
         """Setup all routes for the Flask application"""
 
+        # NOTE: Inspired by sliver and how they utilize different file extensions and endpoints to configure different commands, we do the same here. Below is our structure
+
         @self.app.route("/", methods=["GET"])
         def home():
             return render_template("index.html", domain=self.domain)
@@ -55,7 +60,34 @@ class FlaskApplication:
                 {"status": "healthy", "domain": self.domain, "app": "flask_application"}
             )
 
-        # TODO: Make it such that on domain creation the user can select different endpoints for the message
+        @self.app.route("/<path:filename>.woff", methods=["GET"])
+        def handle_beacon_command_request(filename):
+            """Obtains any commands that have been queued"""
+
+            # Reads command queued from a redis stream 
+        
+
+             
+            
+
+
+            # If there is a queue of commands, return that 
+            
+            # Otherwise, if there is not a queue of commands, return something else 
+            
+
+
+            # Take the top command from teh queue if aavailable
+            # Submit the response
+
+            return jsonify(
+                {
+                    "message": "PDF endpoint accessed",
+                    "filename": filename,
+                    "domain": self.domain,
+                }
+            ), 
+
         @self.app.route("/results", methods=["POST"])
         def reportChunk():
             """

@@ -5,6 +5,7 @@ import signal
 
 
 # NOTE: When proceesses are created for the wsgi servers. all utilize the start_new_session = true to create them as separate(and not child processes)
+# TODO: Get rid of using pid its not needed at all
 def create_wsgi_server(app, port, workers=8):
     """
     Create a domain-specific WSGI server
@@ -23,7 +24,8 @@ def create_wsgi_server(app, port, workers=8):
     _create_wsgi_file(domain, port, workers)
 
     # Run the generated wsgi file directly
-    wsgi_file_path = f"wsgi/wsgi_{domain}.py"
+    safe_domain = domain.replace(".", "_")
+    wsgi_file_path = f"wsgi/wsgi_{safe_domain}.py"
     process = subprocess.Popen(
         ["python", wsgi_file_path],
         stdout=subprocess.PIPE,
@@ -78,25 +80,29 @@ def stop_server_by_port(port, domain=None):
         return False
 
 
-def is_server_running(pid):
+def is_server_running(port):
     """
-    Check if a server process is still running
+    Check if a server is running on the specified port
 
     Args:
-        pid: Process ID to check
+        port: Port number to check
 
     Returns:
-        bool: True if process is running, False otherwise
+        bool: True if server is running on port, False otherwise
     """
     try:
-        # Send signal 0 to check if process exists
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"], capture_output=True, text=True
+        )
+        print(f"Return code: {result.returncode}")
+        print(f"Stdout: '{result.stdout}'")
+        print(f"Stdout stripped: '{result.stdout.strip()}'")
+        print(f"Final result: {result.returncode == 0 and result.stdout.strip()}")
+        return result.returncode == 0 and bool(result.stdout.strip())
+    except FileNotFoundError:
         return False
-    except PermissionError:
-        # Process exists but we don't have permission to signal it
-        return True
+    except Exception:
+        return False
 
 
 def restart_server(domain):
@@ -109,7 +115,8 @@ def restart_server(domain):
     Returns:
         int: New process ID, or None if failed
     """
-    wsgi_file_path = f"wsgi/wsgi_{domain}.py"
+    safe_domain = domain.replace(".", "_")
+    wsgi_file_path = f"wsgi/wsgi_{safe_domain}.py"
 
     if not os.path.exists(wsgi_file_path):
         print(f"WSGI file not found for domain {domain}")
@@ -133,7 +140,8 @@ def delete_wsgi_files(domain):
     Args:
         domain: Domain name to clean up
     """
-    wsgi_file_path = f"wsgi/wsgi_{domain}.py"
+    safe_domain = domain.replace(".", "_")
+    wsgi_file_path = f"wsgi/wsgi_{safe_domain}.py"
 
     if os.path.exists(wsgi_file_path):
         os.remove(wsgi_file_path)
@@ -143,6 +151,8 @@ def delete_wsgi_files(domain):
 def _create_wsgi_file(domain, port, workers):
     """Create domain-specific wsgi file"""
     os.makedirs("wsgi", exist_ok=True)
+
+    safe_domain = domain.replace(".", "_")
 
     wsgi_content = f"""# Import the FlaskApplication class
 import sys
@@ -167,12 +177,12 @@ if __name__ == "__main__":
         '--max-requests', '1000',
         '--access-logfile', '-',
         '--error-logfile', '-',
-        'wsgi_{domain}:app'
+        'wsgi_{safe_domain}:app'
     ]
     
     WSGIApplication("%(prog)s [OPTIONS] [APP_MODULE]").run()
 """
 
-    wsgi_file_path = f"wsgi/wsgi_{domain}.py"
+    wsgi_file_path = f"wsgi/wsgi_{safe_domain}.py"
     with open(wsgi_file_path, "w") as f:
         f.write(wsgi_content)

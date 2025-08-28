@@ -110,6 +110,7 @@ class PyWebC2Shell:
         print(command_list)
         if c.queue_commands(domain, self.redis_client, command_list):
             print(f"SUCCESS: Commands:{command_list} sucessfully queued")
+        c.get_queued_commands(domain, self.redis_client)
 
     def command(self, domain: str, command: str):
         """Insert an HTML comment as a command into a domain"""
@@ -146,6 +147,7 @@ class PyWebC2Shell:
     ):
         """Reads from a broadcast stream in order to obtain messages for a specific domain"""
         # List the available streams to lisen to, these are all active domains that are currently running
+        # FIXME: For sure refactor this code such that the redis read functinoality is not all inside of here
         available_streams = [domain for domain, _ in self.dorch.get_running_domains()]
 
         # Append the 'all' stream, this is a stream that all domains also send their information to

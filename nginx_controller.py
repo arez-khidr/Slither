@@ -152,13 +152,3 @@ class NGINXController:
         except Exception as e:
             print(f"Error reloading nginx: {e}")
             return False
-
-    def set_sites_available_path(self, sites_available_path):
-        """Sets the path to the sites/available path which depends based on the users system and how they installed"""
-        self.sites_available_path = sites_available_path
-        # TODO: Set it up such that suggestions for where the sites available path is can be provided
-
-    def set_sites_enabled_path(self, sites_enabled_path):
-        """Sets the path to the sites/enabled path"""
-        self.sites_enabled_path = sites_enabled_path
-

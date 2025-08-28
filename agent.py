@@ -12,10 +12,11 @@ import time
 
 # .css - Key exchange (to be implemented once we add encryption)
 # .png - close session messages
-# .woff - Gets information on a beacon request  
+# .woff - Gets information on a beacon request
 # .js - session messages
 
 
+# TODO: Make it such that the agent sends using a protobuf, rather than a json, using json for now as honestly it is just easier. I ain't trying to be an attacker
 class Agent:
     def __init__(self, domains: list[str], mode: str = "b"):
         """Agent class:
@@ -46,23 +47,21 @@ class Agent:
         # If there is a backup domain, the agent will switch to that domain
         self.watchdog_timer = 7000
 
-    def check_in(self): 
+    def check_in(self):
         """Obtains any available commands if there are any, if no commands are available it fails"""
-        
-        # Generate a session 
+
+        # Generate a session
         self.session = requests.Session()
 
-        #TODO: In the future, this request is going to require: encryption, nonce and obfuscation 
+        # TODO: In the future, this request is going to require: encryption, nonce and obfuscation
 
         try:
             response = self.session.get(f"http://{self.activeDomain}")
             response.raise_for_status()
 
-            #If there was no raise for status, then we know that there are commands 
-            
+            # If there was no raise for status, then we know that there are commands
 
-
-        except requests.exceptions.Timeout: 
+        except requests.exceptions.Timeout:
             print("Request timed out")
         except requests.exceptions.ConnectionError:
             print("Connection error occurred")
@@ -72,9 +71,8 @@ class Agent:
             print(f"Request failed: {e}")
         except Exception as e:
             print(f"Unexpected error: {e}")
-        
+
         return None
-        
 
     def get_beacon_range(self, range: int = 10):
         """Returns a range for the beacon as a tuple this is so it runs on a slight jitter
@@ -105,15 +103,11 @@ agent = Agent(domains=["localhost2.com"])
 while agent.is_alive():
     # Beacon mode
     if agent.is_beacon():
-
         # Send a check in request
 
-        # Execute commands from that request if any 
-        
-        # Send results back 
-        
-        
-        # Agent goes to sleep  
-        sleep_range = agent.get_beacon_range()
-        sleep_interval = random.uniform(sleep_range[0], sleep_range[1])  # pyright: ignore[]
+        # Execute commands from that request if any
+
+        # Send results back
+
+        # Agent goes to sleep
         time.sleep(sleep_interval)

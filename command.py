@@ -37,7 +37,7 @@ def get_queued_commands(domain: str, redis_client) -> list[str]:
     for i in range(redis_client.llen(list_key)):
         # We pop from the back of the list, executing commands at the back first
         object = redis_client.rpop(list_key)
-        print(object)
+        commands.append(object)
 
     return commands
 

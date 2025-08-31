@@ -4,17 +4,26 @@ import os
 
 
 class NGINXController:
-    def __init__(self):
-        # The path that needs to be called in order to have the application be passed
-        # Hardcoded path for macOS Homebrew nginx servers directory
-        self.nginx_servers_path = "/opt/homebrew/etc/nginx/servers/"
+    def __init__(self, nginx_servers_path=None, nginx_conf_path=None):
+        """
+        Args:
+            nginx_servers_path - The path to the users nginx_servers directory
+            nginx_conf_path - The path where nginx conf files should be stored
+        """
+        # FIXME: AT SOME POINT, before this is published, this needs to be solved ot work on different systems
+        # Maybe we just set it to work with Ubunut or something to host by defualt
+        self.nginx_servers_path = (
+            nginx_servers_path or "/opt/homebrew/etc/nginx/servers/"
+        )
+        self.nginx_conf_path = nginx_conf_path or "nginx"
 
     def add_NGINX_path(self, domain, port):
         """Creates an individual nginx config file for the domain"""
 
         # Create nginx directory if it doesn't exist
-        os.makedirs("nginx", exist_ok=True)
+        os.makedirs(self.nginx_conf_path, exist_ok=True)
 
+        # FIXME: The static files path that is added is going to also have to be removed
         # Create the server block content for this domain
         server_block = f"""server {{
     listen 80;
@@ -47,7 +56,6 @@ class NGINXController:
         proxy_buffers 8 4k;
     }}
     
-    # Static files (if you add any)
     location /static/ {{
         root /Users/arezkhidr/Desktop/pyWebC2;
         expires 30d;
@@ -64,7 +72,8 @@ class NGINXController:
 """
 
         # Write to individual nginx file for this domain
-        nginx_file_path = f"nginx/nginx_{domain}.conf"
+        nginx_file_path = os.path.join(self.nginx_conf_path, f"nginx_{domain}.conf")
+
         with open(nginx_file_path, "w") as file:
             file.write(server_block)
 

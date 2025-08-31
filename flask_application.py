@@ -16,9 +16,9 @@ class FlaskApplication:
     Each instance handles a specific domain with its own template folder and configuration
     """
 
-    def __init__(self, domain, redis_client=None, template_folder=None):
+    def __init__(self, domain, redis_client=redis.Redis(), template_folder=None):
         self.domain = domain
-        self.redis_client = redis_client or redis.Redis()
+        self.redis_client = redis_client
         self.template_folder = template_folder or f"templates/{self.domain}"
 
         self.app = self._create_app()

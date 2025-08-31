@@ -20,6 +20,8 @@ class TestFlaskApplication:
         redis_client = fakeredis.FakeRedis()
         yield redis_client
 
+    ##CREATION FUNCTION TESTS ##
+
     def test_template_folder_is_created(self):
         # Create the required mocks for the params of the FlaskApplication class
         domain = "test.example.com"
@@ -71,7 +73,9 @@ class TestFlaskApplication:
             # Assert that create was not called
             mock_create_index_html.assert_not_called()
 
-    def test_beacon_request_with_available_commands(self, fake_redis_client, tmp_path):
+    def test_beacon_request_with_available_commands_integration(
+        self, fake_redis_client, tmp_path
+    ):
         domain = "test.example.com"
 
         # Decalre the flask application using the fake redis
@@ -106,7 +110,7 @@ class TestFlaskApplication:
             assert response.status_code == 200
             assert json_data["commands"] == commands
 
-    def test_beacon_request_with_no_available_commands(
+    def test_beacon_request_with_no_available_commands_integration(
         self, fake_redis_client, tmp_path
     ):
         domain = "test.example.com"

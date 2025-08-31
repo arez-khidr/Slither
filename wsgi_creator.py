@@ -4,164 +4,185 @@ import os
 import signal
 
 
-# NOTE: When proceesses are created for the wsgi servers. all utilize the start_new_session = true to create them as separate(and not child processes)
-# TODO: Get rid of using pid its not needed at all
-def create_wsgi_server(app, port, workers=8):
-    """
-    Create a domain-specific WSGI server
+class WSGICreator:
+    def __init__(self, redis_client, template_folder=None, wsgi_folder: str = "wsgi"):
+        self.redis_client = redis_client
+        self.template_folder = template_folder
+        self.wsgi_folder = wsgi_folder
 
-    Args:
-        app: Flask application instance
-        port: Port number to run on
-        workers: Number of gunicorn workers
+    def create_wsgi_server(self, app, port, workers=8):
+        """
+        Create a domain-specific WSGI server
 
-    Returns:
-        int: Process ID of started server
-    """
-    domain = app.config.get("DOMAIN", "unknown")
+        Args:
+            app: Flask application instance
+            port: Port number to run on
+            workers: Number of gunicorn workers
 
-    # Generate domain-specific wsgi file
-    _create_wsgi_file(domain, port, workers)
+        Returns:
+            int: Process ID of started server
+        """
+        domain = app.config.get("DOMAIN", "unknown")
 
-    # Run the generated wsgi file directly
-    safe_domain = domain.replace(".", "_")
-    wsgi_file_path = f"wsgi/wsgi_{safe_domain}.py"
-    process = subprocess.Popen(
-        ["python", wsgi_file_path],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        start_new_session=True,
-    )
+        # Generate domain-specific wsgi file
+        self._create_wsgi_file(domain, port, workers)
 
-    print(f"WSGI server started for {domain} on port {port} (PID: {process.pid})")
-    # Return the pid so that it can be stored for future modification and persistence purposes
-    return process.pid
-
-
-def stop_server_by_port(port, domain=None):
-    """
-    Stop all processes using a specific port
-
-    Args:
-        port: Port number to clear
-        domain: Domain name (for logging purposes)
-    """
-    try:
-        result = subprocess.run(
-            ["lsof", "-ti", f":{port}"], capture_output=True, text=True
+        # Run the generated wsgi file directly
+        safe_domain = domain.replace(".", "_")
+        wsgi_file_path = f"{self.wsgi_folder}/wsgi_{safe_domain}.py"
+        process = subprocess.Popen(
+            ["python", wsgi_file_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
         )
 
-        if result.returncode == 0 and result.stdout.strip():
-            pids = result.stdout.strip().split("\n")
-            killed_count = 0
+        print(f"WSGI server started for {domain} on port {port} (PID: {process.pid})")
+        return process.pid
 
-            for pid in pids:
-                try:
-                    os.kill(int(pid), signal.SIGTERM)
-                    killed_count += 1
-                    print(f"Killed process {pid} using port {port}")
-                except (ProcessLookupError, ValueError):
-                    continue
+    def stop_server_by_port(self, port, domain=None):
+        """
+        Stop all processes using a specific port
 
-            if killed_count > 0:
-                print(
-                    f"Cleared {killed_count} processes from port {port}{' for ' + domain if domain else ''}"
-                )
-                return True
+        Args:
+            port: Port number to clear
+            domain: Domain name (for logging purposes)
+        """
+        try:
+            result = subprocess.run(
+                ["lsof", "-ti", f":{port}"], capture_output=True, text=True
+            )
 
-        print(f"No processes found using port {port}")
-        return True
+            if result.returncode == 0 and result.stdout.strip():
+                pids = result.stdout.strip().split("\n")
+                killed_count = 0
 
-    except FileNotFoundError:
-        print("lsof command not found - cannot kill processes by port")
-        return False
-    except Exception as e:
-        print(f"Error stopping processes on port {port}: {e}")
-        return False
+                for pid in pids:
+                    try:
+                        os.kill(int(pid), signal.SIGTERM)
+                        killed_count += 1
+                        print(f"Killed process {pid} using port {port}")
+                    except (ProcessLookupError, ValueError):
+                        continue
 
+                if killed_count > 0:
+                    print(
+                        f"Cleared {killed_count} processes from port {port}{' for ' + domain if domain else ''}"
+                    )
+                    return True
 
-def is_server_running(port):
-    """
-    Check if a server is running on the specified port
+            print(f"No processes found using port {port}")
+            return True
 
-    Args:
-        port: Port number to check
+        except FileNotFoundError:
+            print("lsof command not found - cannot kill processes by port")
+            return False
+        except Exception as e:
+            print(f"Error stopping processes on port {port}: {e}")
+            return False
 
-    Returns:
-        bool: True if server is running on port, False otherwise
-    """
-    try:
-        result = subprocess.run(
-            ["lsof", "-ti", f":{port}"], capture_output=True, text=True
+    def is_server_running(self, port):
+        """
+        Check if a server is running on the specified port
+
+        Args:
+            port: Port number to check
+
+        Returns:
+            bool: True if server is running on port, False otherwise
+        """
+        try:
+            result = subprocess.run(
+                ["lsof", "-ti", f":{port}"], capture_output=True, text=True
+            )
+            print(f"Return code: {result.returncode}")
+            print(f"Stdout: '{result.stdout}'")
+            print(f"Stdout stripped: '{result.stdout.strip()}'")
+            print(f"Final result: {result.returncode == 0 and result.stdout.strip()}")
+            return result.returncode == 0 and bool(result.stdout.strip())
+        except FileNotFoundError:
+            return False
+        except Exception:
+            return False
+
+    def reboot_server(self, domain, port):
+        """
+        Reboot a server from existing WSGI file
+
+        Args:
+            domain: Domain name to restart
+
+        Returns:
+            int: New process ID, or None if failed
+        """
+        safe_domain = domain.replace(".", "_")
+        wsgi_file_path = f"{self.wsgi_folder}/wsgi_{safe_domain}.py"
+
+        if not os.path.exists(wsgi_file_path):
+            print(f"WSGI file not found for domain {domain}")
+            return None
+        if self.is_server_running(port):
+            print("Server is currently running, cannot reboot a running server")
+            return None
+
+        process = subprocess.Popen(
+            ["python", wsgi_file_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
         )
-        print(f"Return code: {result.returncode}")
-        print(f"Stdout: '{result.stdout}'")
-        print(f"Stdout stripped: '{result.stdout.strip()}'")
-        print(f"Final result: {result.returncode == 0 and result.stdout.strip()}")
-        return result.returncode == 0 and bool(result.stdout.strip())
-    except FileNotFoundError:
-        return False
-    except Exception:
-        return False
 
+        print(f"Restarted server for {domain} (PID: {process.pid})")
+        return process.pid
 
-def restart_server(domain):
-    """
-    Restart a server from existing WSGI file
+    def delete_wsgi_files(self, domain):
+        """
+        Delete WSGI files for a domain
 
-    Args:
-        domain: Domain name to restart
+        Args:
+            domain: Domain name to clean up
+        """
+        safe_domain = domain.replace(".", "_")
+        wsgi_file_path = f"{self.wsgi_folder}/wsgi_{safe_domain}.py"
 
-    Returns:
-        int: New process ID, or None if failed
-    """
-    safe_domain = domain.replace(".", "_")
-    wsgi_file_path = f"wsgi/wsgi_{safe_domain}.py"
+        if os.path.exists(wsgi_file_path):
+            os.remove(wsgi_file_path)
+            print(f"Deleted WSGI file for {domain}")
 
-    if not os.path.exists(wsgi_file_path):
-        print(f"WSGI file not found for domain {domain}")
-        return None
+    def _create_wsgi_file(self, domain, port, workers=8):
+        """Create domain-specific wsgi file, this function also creates the Flask Application that is associated with a given wsgi:
+        Args:
+            domain - the associated domain with the wsgi server and the flask application
+            port - the associated port with the wsgi server
+            workers - the amount of workers that handle this domain"""
 
-    process = subprocess.Popen(
-        ["python", wsgi_file_path],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        start_new_session=True,
-    )
+        os.makedirs(self.wsgi_folder, exist_ok=True)
 
-    print(f"Restarted server for {domain} (PID: {process.pid})")
-    return process.pid
+        safe_domain = domain.replace(".", "_")
 
+        # Get redis connection info from the current client
+        redis_host = getattr(
+            self.redis_client.connection_pool, "connection_kwargs", {}
+        ).get("host", "localhost")
+        redis_port = getattr(
+            self.redis_client.connection_pool, "connection_kwargs", {}
+        ).get("port", 6379)
 
-def delete_wsgi_files(domain):
-    """
-    Delete WSGI files for a domain
+        # Get absolute path to project directory this is needed during testing so the flask_application class can be found
+        project_dir = os.path.dirname(os.path.abspath(__file__))
 
-    Args:
-        domain: Domain name to clean up
-    """
-    safe_domain = domain.replace(".", "_")
-    wsgi_file_path = f"wsgi/wsgi_{safe_domain}.py"
-
-    if os.path.exists(wsgi_file_path):
-        os.remove(wsgi_file_path)
-        print(f"Deleted WSGI file for {domain}")
-
-
-def _create_wsgi_file(domain, port, workers):
-    """Create domain-specific wsgi file"""
-    os.makedirs("wsgi", exist_ok=True)
-
-    safe_domain = domain.replace(".", "_")
-
-    wsgi_content = f"""# Import the FlaskApplication class
+        wsgi_content = f"""# Import the FlaskApplication class
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import redis
+sys.path.append('{project_dir}')
 from flask_application import FlaskApplication
 
+# Create Redis client using same connection info as parent
+redis_client = redis.Redis(host='{redis_host}', port={redis_port})
+
 # Create a Flask application instance for {domain} domain
-flask_app_instance = FlaskApplication('{domain}')
+flask_app_instance = FlaskApplication('{domain}', redis_client, '{self.template_folder}')
 app = flask_app_instance.get_app()
 
 if __name__ == "__main__":
@@ -183,6 +204,6 @@ if __name__ == "__main__":
     WSGIApplication("%(prog)s [OPTIONS] [APP_MODULE]").run()
 """
 
-    wsgi_file_path = f"wsgi/wsgi_{safe_domain}.py"
-    with open(wsgi_file_path, "w") as f:
-        f.write(wsgi_content)
+        wsgi_file_path = f"{self.wsgi_folder}/wsgi_{safe_domain}.py"
+        with open(wsgi_file_path, "w") as f:
+            f.write(wsgi_content)

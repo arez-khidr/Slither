@@ -10,7 +10,7 @@ import time
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-import wsgi_creator
+from wsgi_creator import WSGICreator
 from flask_application import FlaskApplication
 
 
@@ -21,7 +21,19 @@ def get_free_port():
 
 
 class TestWSGICreator:
-    # Create a fake flask application to use
+    # NOTE: All tmp_paths here point to the same fake directory, regardless of tmp_path being a paramter multiple times
+    @pytest.fixture
+    def wsgi_creator(self, tmp_path):
+        """Create WSGICreator with test-appropriate parameters"""
+        fake_redis = fakeredis.FakeRedis()
+        wsgi_folder = str(tmp_path / "wsgi")
+
+        return WSGICreator(
+            redis_client=fake_redis,
+            template_folder=tmp_path,
+            wsgi_folder=wsgi_folder,
+        )
+
     @pytest.fixture
     def fake_app(self, tmp_path):
         redis_client = fakeredis.FakeRedis()
@@ -29,20 +41,19 @@ class TestWSGICreator:
         app = FlaskApplication(
             domain="testing.com",
             redis_client=redis_client,
-            template_folder=tmp_path,  # tmp_path is a fixture that is used by pytest that automatically handles the teardown of opwerations
+            template_folder=tmp_path,
         )
 
         yield app
 
-    # Test the creation of a wsgi server (we assume this will always run with a domain that is not pased beforehand)
-    def test_create_wsgi_app(self, fake_app):
+    def test_create_wsgi_app_integration(self, wsgi_creator, fake_app):
         test_port = get_free_port()
 
         pid = wsgi_creator.create_wsgi_server(
             app=fake_app.get_app(), port=test_port, workers=8
         )
 
-        expected_wsgi_path = "wsgi/wsgi_testing_com.py"
+        expected_wsgi_path = f"{wsgi_creator.wsgi_folder}/wsgi_testing_com.py"
         assert os.path.exists(expected_wsgi_path)
 
         with open(expected_wsgi_path, "r") as f:
@@ -55,13 +66,13 @@ class TestWSGICreator:
         wsgi_creator.stop_server_by_port(test_port, "testing.com")
         wsgi_creator.delete_wsgi_files("testing.com")
 
-    def test_create_and_teardown_by_port(self, fake_app):
+    def test_create_and_teardown_by_port_integration(self, wsgi_creator, fake_app):
         test_port = get_free_port()
 
         wsgi_creator.create_wsgi_server(
             app=fake_app.get_app(), port=test_port, workers=4
         )
-        wsgi_path = "wsgi/wsgi_testing_com.py"
+        wsgi_path = f"{wsgi_creator.wsgi_folder}/wsgi_testing_com.py"
 
         assert os.path.exists(wsgi_path)
 
@@ -71,7 +82,7 @@ class TestWSGICreator:
         wsgi_creator.delete_wsgi_files("testing.com")
         assert not os.path.exists(wsgi_path)
 
-    def test_is_server_running(self, fake_app):
+    def test_is_server_running_integration(self, wsgi_creator, fake_app):
         test_port = get_free_port()
 
         assert wsgi_creator.is_server_running(test_port) is False
@@ -92,6 +103,24 @@ class TestWSGICreator:
         time.sleep(2)
 
         assert wsgi_creator.is_server_running(test_port) is False
+
+    def test_restart_server_integration(self, wsgi_creator, fake_app):
+        # testing for an appliction that was previously paused, meaning it has an existing wsgi file but not started
+        # Create the wsgi file
+        test_port = get_free_port()
+        app = fake_app.get_app()
+        domain = app.config.get("DOMAIN", "unknown")
+
+        wsgi_creator._create_wsgi_file(domain, test_port)
+
+        assert wsgi_creator.is_server_running(test_port) is False
+
+        # restart
+        wsgi_creator.reboot_server(domain, test_port)
+        # Wait longer for gunicorn to shut down
+        time.sleep(2)
+
+        assert wsgi_creator.is_server_running(test_port) is True
 
 
 if __name__ == "__main__":

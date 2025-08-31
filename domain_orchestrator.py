@@ -1,11 +1,5 @@
 from flask_application import FlaskApplication
-from wsgi_creator import (
-    create_wsgi_server,
-    stop_server_by_port,
-    is_server_running,
-    restart_server,
-    delete_wsgi_files,
-)
+from wsgi_creator import WSGICreator
 from nginx_controller import NGINXController
 import socket
 import subprocess
@@ -13,6 +7,7 @@ import os
 import shutil
 import json
 from datetime import datetime
+import redis
 
 
 class DomainOrchestrator:
@@ -24,11 +19,32 @@ class DomainOrchestrator:
     - Updating the nginx server config
     """
 
-    def __init__(self):
-        # A dictionary that stores all of the values of any corresponding application. So that on a new loading of the program it can be booted
-        # Format is as follows domainDictionary[domain] = [port, pid, status, date created]
-        # This is to be written to a json on application close
+    def __init__(
+        self,
+        domain_storage: str = "domains.json",
+        redis_client=redis.Redis(),
+        template_folder=None,
+        wsgi_folder: str = "wsgi",
+    ):
+        """Creates the domain orchestrator object with the following parameters
+        Args:
+            domainDictionary - dictionary that stores the current status of domains while the application is running
+            domain_storage - the file path to the json file that handles saving and persisitence operations
+            redis_client - Redis client for Flask applications
+            template_folder - Base template folder for Flask applications
+            wsgi_folder - Folder where WSGI files are stored"""
         self.domainDictionary = {}
+        self.domain_storage = domain_storage
+        self.redis_client = redis_client
+        self.template_folder = template_folder
+        self.wsgi_folder = wsgi_folder
+
+        # Create WSGICreator instance
+        self.wsgi_creator = WSGICreator(
+            redis_client=self.redis_client,
+            template_folder=self.template_folder,
+            wsgi_folder=self.wsgi_folder,
+        )
 
     # TODO: Have it such that the user just inputs an entire FQDN and we parse out the other components?? (We parse components for naming purposes)
     # AS what would I do in the isntance of a subdomain 1
@@ -62,13 +78,12 @@ class DomainOrchestrator:
                 return False
 
         try:
-            print("Inside of the domain try ")
             # Create the flask application corresponding to the domain
-            flask_application = FlaskApplication(domain)
+            flask_application = FlaskApplication(domain, self.redis_client)
             app = flask_application.get_app()
 
             # Create a corresponding WSGI server in a new file
-            pid = create_wsgi_server(app, port)
+            pid = self.wsgi_creator.create_wsgi_server(app, port)
 
             # Update the nginx.conf file as well in reference
             nginx_controller = NGINXController()
@@ -103,8 +118,8 @@ class DomainOrchestrator:
         port, pid, status, date_created = self.domainDictionary[domain]
 
         # Stop the WSGI server if running
-        if status == "running" and is_server_running(port):
-            stop_server_by_port(port, domain)
+        if status == "running" and self.wsgi_creator.is_server_running(port):
+            self.wsgi_creator.stop_server_by_port(port, domain)
 
         # Remove nginx configuration
         nginx_controller = NGINXController()
@@ -118,7 +133,7 @@ class DomainOrchestrator:
             print(f"Deleted template directory for {domain}")
 
         # Delete WSGI files
-        delete_wsgi_files(domain)
+        self.wsgi_creator.delete_wsgi_files(domain)
 
         # Remove from domain dictionary
         del self.domainDictionary[domain]
@@ -144,8 +159,8 @@ class DomainOrchestrator:
             return False
 
         # Stop the server process
-        if is_server_running(port):
-            stop_server_by_port(port, domain)
+        if self.wsgi_creator.is_server_running(port):
+            self.wsgi_creator.stop_server_by_port(port, domain)
 
         if resume:
             self.domainDictionary[domain] = (port, None, "resume", date_created)
@@ -175,7 +190,7 @@ class DomainOrchestrator:
             return False
 
         # Restart the server using existing WSGI file
-        new_pid = restart_server(domain)
+        new_pid = self.wsgi_creator.reboot_server(domain, port)
 
         if new_pid:
             # Update metadata back to running state
@@ -227,8 +242,12 @@ class DomainOrchestrator:
     def _load_domains(self):
         """Loads all of the previously stored domains from the domains.json file into the dictionary"""
         try:
-            with open("domains.json", "r") as f:
-                self.domainDictionary = json.load(f)
+            with open(self.domain_storage, "r") as f:
+                loaded_data = json.load(f)
+                # Convert lists back to tuples for consistency
+                self.domainDictionary = {
+                    domain: tuple(info) for domain, info in loaded_data.items()
+                }
             # print("Domain configuration loaded from domains.json")
             return True
         except FileNotFoundError:
@@ -241,7 +260,7 @@ class DomainOrchestrator:
     def _store_domains(self):
         """Stores all of the domains in a json for future usage"""
         try:
-            with open("domains.json", "w") as f:
+            with open(self.domain_storage, "w") as f:
                 json.dump(self.domainDictionary, f, indent=2)
             print("Domain configuration saved to domains.json")
         except Exception as e:
@@ -276,6 +295,7 @@ class DomainOrchestrator:
                 sock.bind(("127.0.0.1", port))
                 return True
         except OSError:
+            print(f"Error encountered while seeing if {port} was available for usage")
             return False
 
     def find_available_port(self, start_port=8000, max_attempts=100):

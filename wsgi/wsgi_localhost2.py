@@ -1,11 +1,15 @@
 # Import the FlaskApplication class
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import redis
+sys.path.append('/Users/arezkhidr/Desktop/pyWebC2')
 from flask_application import FlaskApplication
 
+# Create Redis client using same connection info as parent
+redis_client = redis.Redis(host='localhost', port=6379)
+
 # Create a Flask application instance for localhost2 domain
-flask_app_instance = FlaskApplication('localhost2')
+flask_app_instance = FlaskApplication('localhost2', redis_client, 'None')
 app = flask_app_instance.get_app()
 
 if __name__ == "__main__":

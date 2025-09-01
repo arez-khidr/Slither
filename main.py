@@ -210,6 +210,7 @@ class PyWebC2Shell:
         """Runs the typer app as we are calling it inside of a class"""
         self.app()
 
+    # FIXME: There is an error where where if the user is entering a passowrd ro some other system command and they hit cntrl-C the domain gets stuck in a resume state
     ## Functions for the graceful shutting down of the application in the case of an error ##
 
     def _register_shutdown_handlers(self):

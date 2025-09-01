@@ -19,7 +19,7 @@ class FlaskApplication:
     def __init__(self, domain, redis_client=redis.Redis(), template_folder=None):
         self.domain = domain
         self.redis_client = redis_client
-        self.template_folder = template_folder or f"templates/{self.domain}"
+        self.template_folder = template_folder or f"../templates/{self.domain}"
 
         self.app = self._create_app()
         self._setup_routes()
@@ -43,7 +43,7 @@ class FlaskApplication:
             {
                 "DOMAIN": self.domain,
                 "SECRET_KEY": f"{self.domain}-secret-key",
-                "DEBUG": False,
+                "DEBUG": True,
             }
         )
 
@@ -97,24 +97,22 @@ class FlaskApplication:
             # TODO: Verify the nonce of the endpoint/obfuscation/encryption
 
             data = request.get_json()
-            results = list(data.get("results"))
+            results = data.get("results")
             commands = data.get("commands")
 
+            # Ensure that results is a list and not another python iterable (string)
+            if not isinstance(results, list):
+                return jsonify(error="Results must be a list"), 400
+            if not isinstance(commands, list):
+                return jsonify(error="Commands must be a list"), 400
+
             if results and commands:
-                for i in range(len(results)):
-                    stream_key = f"{self.domain}:results"
-                    self.redis_client.xadd(
-                        stream_key,
-                        {
-                            "ts": time(),
-                            "domain": self.domain,
-                            "command": commands[i],
-                            "result": results[i],
-                        },
-                    )
+                self._redis_push_results(results, commands)
                 return jsonify(status="received"), 200
             else:
-                return jsonify(error="No results provided"), 400
+                return jsonify(
+                    status="no results or commands provided",
+                )
 
         @self.app.route("/results", methods=["POST"])
         def reportChunk():
@@ -128,6 +126,26 @@ class FlaskApplication:
 
             # Return status required for Flask
             return jsonify(status="ok"), 200
+
+    def _redis_push_results(self, results, commands):
+        # Ensure that the data type is a list and not another python iterable (string)
+
+        try:
+            for i in range(len(results)):
+                stream_key = f"{self.domain}:results"
+                self.redis_client.xadd(
+                    stream_key,
+                    {
+                        "ts": time(),
+                        "domain": self.domain,
+                        "command": commands[i],
+                        # NOTE: THE RESULTS MUST BE STRIPPED OF ANY NEWLINE CHARACTERS, I don't know if this applies for a real redis instance and server,
+                        # HOwever during testing for the fake redis, it was literally breaking with a newline character being inputted
+                        "result": results[i].strip(),
+                    },
+                )
+        except Exception as e:
+            print(f"Error: {e}")
 
     def _redis_stream_push(self, data):
         """

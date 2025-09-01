@@ -44,6 +44,7 @@ class NGINXController:
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Content-Type $content_type;
         
         # Timeouts
         proxy_connect_timeout 30s;

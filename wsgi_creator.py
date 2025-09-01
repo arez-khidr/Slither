@@ -61,7 +61,6 @@ class WSGICreator:
                     try:
                         os.kill(int(pid), signal.SIGTERM)
                         killed_count += 1
-                        print(f"Killed process {pid} using port {port}")
                     except (ProcessLookupError, ValueError):
                         continue
 
@@ -95,10 +94,10 @@ class WSGICreator:
             result = subprocess.run(
                 ["lsof", "-ti", f":{port}"], capture_output=True, text=True
             )
-            print(f"Return code: {result.returncode}")
-            print(f"Stdout: '{result.stdout}'")
-            print(f"Stdout stripped: '{result.stdout.strip()}'")
-            print(f"Final result: {result.returncode == 0 and result.stdout.strip()}")
+            # print(f"Return code: {result.returncode}")
+            # print(f"Stdout: '{result.stdout}'")
+            # print(f"Stdout stripped: '{result.stdout.strip()}'")
+            # print(f"Final result: {result.returncode == 0 and result.stdout.strip()}")
             return result.returncode == 0 and bool(result.stdout.strip())
         except FileNotFoundError:
             return False
@@ -167,6 +166,9 @@ class WSGICreator:
         redis_port = getattr(
             self.redis_client.connection_pool, "connection_kwargs", {}
         ).get("port", 6379)
+
+        print(f"This is the redis_host {redis_host}")
+        print(f"This is the redis_port {redis_port} ")
 
         # Get absolute path to project directory this is needed during testing so the flask_application class can be found
         project_dir = os.path.dirname(os.path.abspath(__file__))

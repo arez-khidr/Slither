@@ -22,10 +22,10 @@ class TestFlaskApplication:
 
     ##CREATION FUNCTION TESTS ##
 
-    def test_template_folder_is_created(self):
+    def test_template_folder_is_created(self, fake_redis_client):
         # Create the required mocks for the params of the FlaskApplication class
         domain = "test.example.com"
-        excepted_template_folder = f"templates/{domain}"
+        excepted_template_folder = f"../templates/{domain}"
 
         # Path the call that makes hte directory
 
@@ -38,7 +38,7 @@ class TestFlaskApplication:
             # Run the test
             app = FlaskApplication(
                 domain=domain,  # Use defaults for the below values
-                redis_client=None,
+                redis_client=fake_redis_client,
                 template_folder=None,
             )
             # Assertion
@@ -93,7 +93,7 @@ class TestFlaskApplication:
         )
 
         # Example url that is called so we can test it
-        fake_url = f"https://{domain}.com/fjioawejfoew/jfioewajfo/test.woff"
+        fake_url = f"https://{domain}/fjioawejfoew/jfioewajfo/test.woff"
 
         # Make sure that the folder and the file were created
         assert os.path.exists(tmp_path)
@@ -123,7 +123,7 @@ class TestFlaskApplication:
         )
 
         # Example url that is called so we can test it
-        fake_url = f"https://{domain}.com/fjioawejfoew/jfioewajfo/test.woff"
+        fake_url = f"https://{domain}/fjioawejfoew/jfioewajfo/test.woff"
 
         # Make sure that the folder and the file were created
         assert os.path.exists(tmp_path)
@@ -158,7 +158,7 @@ class TestFlaskApplication:
 
         # Example url that is called so we can test it
 
-        fake_url = f"https://{domain}.com/fjioawejfoew/jfioewajfo/test.css"
+        fake_url = f"https://{domain}/fjioawejfoew/jfioewajfo/test.css"
 
         # Make sure that the folder and the file were created
         assert os.path.exists(tmp_path)

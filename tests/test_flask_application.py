@@ -1,8 +1,4 @@
 import os
-import sys
-from tempfile import template
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import flask_application
 import pytest
 from unittest.mock import Mock, patch
@@ -13,13 +9,6 @@ from time import time
 
 
 class TestFlaskApplication:
-    # Creating a fake redis_client
-
-    @pytest.fixture
-    def fake_redis_client(request):
-        redis_client = fakeredis.FakeRedis()
-        yield redis_client
-
     ##CREATION FUNCTION TESTS ##
 
     def test_template_folder_is_created(self, fake_redis_client):
@@ -192,6 +181,3 @@ class TestFlaskApplication:
 
     ##TODO: Do the same tests but with the agents as well! For a FULL integration test
 
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

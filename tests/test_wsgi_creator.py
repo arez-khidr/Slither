@@ -5,45 +5,32 @@ import signal
 import socket
 from unittest.mock import Mock, patch, mock_open, MagicMock
 import fakeredis
-import sys
 import time
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from wsgi_creator import WSGICreator
 from flask_application import FlaskApplication
-
-
-def get_free_port():
-    with socket.socket() as s:
-        s.bind(("", 0))
-        return s.getsockname()[1]
+from tests.conftest import get_free_port
 
 
 class TestWSGICreator:
-    # NOTE: All tmp_paths here point to the same fake directory, regardless of tmp_path being a paramter multiple times
     @pytest.fixture
-    def wsgi_creator(self, tmp_path):
+    def wsgi_creator(self, tmp_path, fake_redis_client):
         """Create WSGICreator with test-appropriate parameters"""
-        fake_redis = fakeredis.FakeRedis()
         wsgi_folder = str(tmp_path / "wsgi")
 
         return WSGICreator(
-            redis_client=fake_redis,
+            redis_client=fake_redis_client,
             template_folder=tmp_path,
             wsgi_folder=wsgi_folder,
         )
 
     @pytest.fixture
-    def fake_app(self, tmp_path):
-        redis_client = fakeredis.FakeRedis()
-
+    def fake_app(self, tmp_path, fake_redis_client):
         app = FlaskApplication(
             domain="testing.com",
-            redis_client=redis_client,
+            redis_client=fake_redis_client,
             template_folder=tmp_path,
         )
-
         yield app
 
     def test_create_wsgi_app_integration(self, wsgi_creator, fake_app):
@@ -121,7 +108,3 @@ class TestWSGICreator:
         time.sleep(2)
 
         assert wsgi_creator.is_server_running(test_port) is True
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

@@ -25,6 +25,7 @@ class DomainOrchestrator:
         redis_client=redis.Redis(),
         template_folder=None,
         wsgi_folder: str = "wsgi",
+        nginx_conf_folder: str = "nginx",
     ):
         """Creates the domain orchestrator object with the following parameters
         Args:
@@ -38,6 +39,10 @@ class DomainOrchestrator:
         self.redis_client = redis_client
         self.template_folder = template_folder
         self.wsgi_folder = wsgi_folder
+        self.nginx_conf_folder = nginx_conf_folder
+
+        # Create an nginx_controlelr instance
+        self.nginx_controller = NGINXController(nginx_conf_path=nginx_conf_folder)
 
         # Create WSGICreator instance
         self.wsgi_creator = WSGICreator(
@@ -86,7 +91,7 @@ class DomainOrchestrator:
             pid = self.wsgi_creator.create_wsgi_server(app, port)
 
             # Update the nginx.conf file as well in reference
-            nginx_controller = NGINXController()
+            nginx_controller = self.nginx_controller
             nginx_controller.add_NGINX_path(domain, port)
 
             # Store the domain information in our domain dictionary if successfull
@@ -122,7 +127,7 @@ class DomainOrchestrator:
             self.wsgi_creator.stop_server_by_port(port, domain)
 
         # Remove nginx configuration
-        nginx_controller = NGINXController()
+        nginx_controller = self.nginx_controller
         nginx_controller.remove_nginx_path(domain)
 
         # Delete the website template files

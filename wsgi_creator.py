@@ -124,6 +124,7 @@ class WSGICreator:
             print("Server is currently running, cannot reboot a running server")
             return None
 
+        # NOTE: Start start_new_session here is true to ensure separation of the parent and the child processes!
         process = subprocess.Popen(
             ["python", wsgi_file_path],
             stdout=subprocess.PIPE,

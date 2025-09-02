@@ -117,7 +117,7 @@ class NGINXController:
     def _copy_nginx_file(self, domain):
         """Copies individual domain nginx file to servers directory"""
         try:
-            local_file = f"nginx/nginx_{domain}.conf"
+            local_file = f"{self.nginx_conf_path}/nginx_{domain}.conf"
             server_file = f"{self.nginx_servers_path}nginx_{domain}.conf"
 
             copy_result = subprocess.run(

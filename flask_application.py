@@ -138,6 +138,8 @@ class FlaskApplication:
                 time_spent += 0.1
                 # Set the sleep operation
                 sleep(0.1)
+            # FIXME: I think that there is a the possibility for a race condition here. In that if the user inputs multiple commands, get_queued_commands validates to
+            # True before all of them are inputted into the redis stream, as result only one or two are returned
 
             # If commands were found we immiedately return
             if commands:

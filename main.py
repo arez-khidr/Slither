@@ -17,6 +17,7 @@ from datetime import datetime
 
 # TODO: Add the rich help panel for functions that have different arguements: https://typer.tiangolo.com/tutorial/options/help/#cli-options-help-panels
 # TODO: At some point, it could be valuable to create a separate redis manager class with a single client, but for now, leave it and keep goign
+# TODO: Should create a startup that ensures that both nginx and redis servers are up and running
 
 
 class PyWebC2Shell:

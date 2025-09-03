@@ -5,7 +5,8 @@ from unittest.mock import Mock, patch
 from flask_application import FlaskApplication
 import fakeredis
 import command
-from time import time
+from time import time, sleep
+import threading
 
 
 class TestFlaskApplication:
@@ -63,17 +64,9 @@ class TestFlaskApplication:
             mock_create_index_html.assert_not_called()
 
     def test_beacon_request_with_available_commands_integration(
-        self, fake_redis_client, tmp_path
+        self, flask_app, fake_redis_client, tmp_path
     ):
         domain = "test.example.com"
-
-        # Decalre the flask application using the fake redis
-        app = FlaskApplication(
-            domain=domain,
-            redis_client=fake_redis_client,
-            template_folder=tmp_path,  # tmp_path is a fixture that is used by pytest that automatically handles the teardown of opwerations
-        )
-
         commands = ["ls", "pwd"]
 
         # Make sure that commands are queued into the redis_client
@@ -91,7 +84,7 @@ class TestFlaskApplication:
         # Use a real http request (in the agent tests this should be using the agent)
         # At the moment this is using the test client for flask applications
         # Going to have the client send the following format for now
-        with app.get_app().test_client() as client:
+        with flask_app.get_app().test_client() as client:
             response = client.get(fake_url)
 
             json_data = response.get_json()
@@ -100,16 +93,9 @@ class TestFlaskApplication:
             assert json_data["commands"] == commands
 
     def test_beacon_request_with_no_available_commands_integration(
-        self, fake_redis_client, tmp_path
+        self, flask_app, tmp_path
     ):
         domain = "test.example.com"
-        # Decalre the flask application using the fake redis
-
-        app = FlaskApplication(
-            domain=domain,
-            redis_client=fake_redis_client,
-            template_folder=tmp_path,  # tmp_path is a fixture that is used by pytest that automatically handles the teardown of opwerations
-        )
 
         # Example url that is called so we can test it
         fake_url = f"https://{domain}/fjioawejfoew/jfioewajfo/test.woff"
@@ -118,7 +104,7 @@ class TestFlaskApplication:
         assert os.path.exists(tmp_path)
         assert os.path.exists(os.path.join(tmp_path, "index.html"))
 
-        with app.get_app().test_client() as client:
+        with flask_app.get_app().test_client() as client:
             response = client.get(fake_url)
 
             json_data = response.get_json()
@@ -126,17 +112,10 @@ class TestFlaskApplication:
             assert response.status_code == 404
             assert json_data["status"] == "No data available"
 
-    def test_beacon_results_with_success(self, fake_redis_client, tmp_path):
+    def test_beacon_results_with_success(self, flask_app, fake_redis_client, tmp_path):
         """Sends over results from a beacon and tests whether the application is able to handle them"""
 
         domain = "test.example.com"
-        # Decalre the flask application using the fake redis
-
-        app = FlaskApplication(
-            domain=domain,
-            redis_client=fake_redis_client,
-            template_folder=tmp_path,  # tmp_path is a fixture that is used by pytest that automatically handles the teardown of opwerations
-        )
 
         commands = ["pwd", "ls"]
 
@@ -153,7 +132,7 @@ class TestFlaskApplication:
         assert os.path.exists(tmp_path)
         assert os.path.exists(os.path.join(tmp_path, "index.html"))
 
-        with app.get_app().test_client() as client:
+        with flask_app.get_app().test_client() as client:
             response = client.post(
                 fake_url,
                 json={"results": command_results, "commands": commands},
@@ -179,5 +158,145 @@ class TestFlaskApplication:
         assert messages[1][1][b"result"].decode() == command_results[1]
         assert messages[1][1][b"domain"].decode() == domain
 
-    ##TODO: Do the same tests but with the agents as well! For a FULL integration test
+    def test_long_polling_request_with_success(
+        self, flask_app, fake_redis_client, tmp_path
+    ):
+        domain = "test.example.com"
+        commands = ["ls", "pwd"]
 
+        # Make sure that commands are queued into the redis_client
+        command.queue_commands(
+            domain=domain, redis_client=fake_redis_client, commands=commands
+        )
+
+        # Example url that is called so we can test it
+        fake_url = f"https://{domain}/fjioawejfoew/jfioewajfo/test.png"
+
+        # Make sure that the folder and the file were created
+        assert os.path.exists(tmp_path)
+        assert os.path.exists(os.path.join(tmp_path, "index.html"))
+
+        # Use a real http request (in the agent tests this should be using the agent)
+        # At the moment this is using the test client for flask applications
+        # Going to have the client send the following format for now
+        with flask_app.get_app().test_client() as client:
+            response = client.get(fake_url)
+            json_data = response.get_json()
+            # We expect the response to be our commands that we have taken so assert there
+            assert response.status_code == 200
+            assert json_data["commands"] == commands
+
+    def test_long_polling_request_with_success_commands_not_immediately_available(
+        self, flask_app, fake_redis_client, tmp_path
+    ):
+        """Test long polling when commands arrive after a delay"""
+        domain = "test.example.com"
+        commands = ["echo delayed", "ls -la"]
+
+        # Example url that is called so we can test it
+        fake_url = f"https://{domain}/fjioawejfoew/jfioewajfo/test.png"
+
+        # Make sure that the folder and the file were created
+        assert os.path.exists(tmp_path)
+        assert os.path.exists(os.path.join(tmp_path, "index.html"))
+
+        def queue_commands_after_delay():
+            """Function to queue commands after 2 seconds"""
+            sleep(2)  # Wait 2 seconds
+            command.queue_commands(
+                domain=domain, redis_client=fake_redis_client, commands=commands
+            )
+
+        # Start the thread to queue commands after delay
+        thread = threading.Thread(target=queue_commands_after_delay, daemon=True)
+        thread.start()
+
+        # Record start time
+        start_time = time()
+
+        # Make the blocking request (this will wait for commands)
+        with flask_app.get_app().test_client() as client:
+            response = client.get(fake_url)
+            json_data = response.get_json()
+
+            # Record end time
+            end_time = time()
+
+            # Verify response
+            assert response.status_code == 200
+            assert json_data["commands"] == commands
+
+            # Verify it took approximately 2 seconds
+            elapsed_time = end_time - start_time
+            assert elapsed_time == pytest.approx(2.0, abs=0.5)  # 2 seconds ±0.5s
+
+        # Wait for thread to complete
+        thread.join()
+
+    def test_long_polling_requests_with_no_commands(
+        self, flask_app, fake_redis_client, tmp_path
+    ):
+        domain = "test.example.com"
+        # Example url that is called so we can test it
+        fake_url = f"https://{domain}/fjioawejfoew/jfioewajfo/test.png"
+
+        # Make sure that the folder and the file were created
+        assert os.path.exists(tmp_path)
+        assert os.path.exists(os.path.join(tmp_path, "index.html"))
+
+        # Use a real http request (in the agent tests this should be using the agent)
+        # At the moment this is using the test client for flask applications
+        # Going to have the client send the following format for now
+        with flask_app.get_app().test_client() as client:
+            response = client.get(fake_url)
+            json_data = response.get_json()
+            # We expect the response to be our commands that we have taken so assert there
+            assert response.status_code == 404
+            assert json_data["status"] == "No results or commands provided"
+
+    def test_sending_long_polling_results(self, flask_app, fake_redis_client, tmp_path):
+        domain = "test.example.com"
+
+        commands = ["pwd", "ls"]
+
+        command_results = [
+            "/johnnybgoode/chuckBerry/Desktop",
+            "test.txt \n songs.txt \n dog.jpg",
+        ]
+
+        # Example url that is called so we can test it
+
+        fake_url = f"https://{domain}/fjioawejfoew/jfioewajfo/test.js"
+
+        # Make sure that the folder and the file were created
+        assert os.path.exists(tmp_path)
+        assert os.path.exists(os.path.join(tmp_path, "index.html"))
+
+        with flask_app.get_app().test_client() as client:
+            response = client.post(
+                fake_url,
+                json={"results": command_results, "commands": commands},
+            )
+
+            json_data = response.get_json()
+            # We expect the response to be our commands that we have taken so assert there
+            assert response.status_code == 200  # Confirmation that they were recieved
+            assert json_data["status"] == "received"
+
+        stream_key = f"{domain}:results"
+        stream_data = fake_redis_client.xread({stream_key: 0})
+
+        assert len(stream_data[0][1]) == 2
+        messages = stream_data[0][1]
+
+        assert messages[0][1][b"command"].decode() == commands[0]
+        assert messages[0][1][b"result"].decode() == command_results[0]
+        assert messages[0][1][b"domain"].decode() == domain
+
+        assert messages[1][1][b"command"].decode() == commands[1]
+        assert messages[1][1][b"result"].decode() == command_results[1]
+
+    def test_sending_long_polling_results_with_no_commands(
+        self, flask_app, fake_redis_client
+    ):
+        pass

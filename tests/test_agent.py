@@ -1,6 +1,6 @@
 import pytest
-import time
-import agent
+import threading
+from time import sleep, time
 import command
 # NOTE: In order for these tests to work, you need to modify your dns resolution to resolve to localhost for the following domains
 # running.com
@@ -44,7 +44,7 @@ class TestAgent:
 
         # Have the agent reach out to the domain
         # Time out before the agent checks in
-        time.sleep(1)
+        sleep(1)
 
         commands = agent._check_in()
 
@@ -79,7 +79,7 @@ class TestAgent:
 
         # Have the agent reach out to the domain
         # Time out before the agent checks in
-        time.sleep(1)
+        sleep(1)
 
         commands = agent._check_in()
         assert expected_commands == commands
@@ -117,14 +117,14 @@ class TestAgent:
 
         # Have the agent reach out to the domain
         # Time out before the agent checks in
-        time.sleep(1)
+        sleep(1)
 
         # Run the beacon chain
 
         chain_result = agent.execute_beacon_chain()
         assert chain_result is True
 
-        time.sleep(1)
+        sleep(1)
         # Ensure that the commands and their outputs were stored into the redis_stream, meaning they were executed and sent
         stream_key = "testing.com:results"
 
@@ -185,7 +185,7 @@ class TestAgent:
         assert fake_redis_client.lindex(queue_key, 1).decode() == failing_commands[0]
 
         # Have the agent reach out to the domain
-        time.sleep(1)
+        sleep(1)
 
         # Run the beacon chain - commands should be received but execution will fail
         chain_result = agent.execute_beacon_chain()
@@ -193,7 +193,7 @@ class TestAgent:
             chain_result is True
         )  # Chain still succeeds, error messages are sent back
 
-        time.sleep(1)
+        sleep(1)
         stream_key = "testing.com:results"
 
         stream_length = fake_redis_client.xlen(stream_key)
@@ -222,3 +222,321 @@ class TestAgent:
 
         fake_redis_client.flushall()
 
+    def test_getting_long_polling_commands_with_flask_application(
+        self, agent, fake_dorch, fake_redis_client
+    ):
+        fake_dorch.startup_domains()
+        agent._set_long_poll()
+
+        fake_redis_client.flushall()
+        running_domains = fake_dorch.get_running_domains()
+        assert any(domain == "testing.com" for domain, _ in running_domains)
+        expected_commands = ["echo hello", "echo fart"]
+
+        # Insert commands into the domain
+        command.queue_commands(
+            domain="testing.com",
+            redis_client=fake_redis_client,
+            commands=expected_commands,
+        )
+
+        # Assert that the commands were added to Redis
+        queue_key = "testing.com:pending"
+        assert fake_redis_client.llen(queue_key) == 2
+        assert fake_redis_client.lindex(queue_key, 0).decode() == expected_commands[1]
+        assert fake_redis_client.lindex(queue_key, 1).decode() == expected_commands[0]
+
+        # Have the agent reach out to the domain
+        # Time out before the agent checks in
+        sleep(1)
+
+        commands = agent._long_poll()
+
+        assert expected_commands == commands
+
+    def test_long_polling_commands_not_available_with_flask_application(
+        self, agent, fake_redis_client, fake_dorch
+    ):
+        agent._set_long_poll()
+        fake_dorch.startup_domains()
+
+        fake_redis_client.flushall()
+        running_domains = fake_dorch.get_running_domains()
+        assert any(domain == "testing.com" for domain, _ in running_domains)
+
+        # Time out before the agent checks in
+        sleep(1)
+        start = time()
+        commands = agent._long_poll()
+        end = time()
+
+        # Assert that they waited the default time before hte server cut out connection 10 seconds
+        elapsed_time = end - start
+        assert elapsed_time == pytest.approx(10, abs=0.5)  # 10 sec +_0.5s
+        assert commands is None
+
+    def test_long_polling_commands_not_available_immediately_with_flask_application(
+        self, agent, fake_redis_client, fake_dorch
+    ):
+        fake_dorch.startup_domains()
+        agent._set_long_poll()
+
+        fake_redis_client.flushall()
+        running_domains = fake_dorch.get_running_domains()
+        assert any(domain == "testing.com" for domain, _ in running_domains)
+        expected_commands = ["echo hello", "echo fart"]
+
+        def queue_commands_after_delay():
+            # Insert commands into the domain
+            sleep(4)
+            command.queue_commands(
+                domain="testing.com",
+                redis_client=fake_redis_client,
+                commands=expected_commands,
+            )
+
+        thread = threading.Thread(target=queue_commands_after_delay, daemon=True)
+
+        # Set a start time:
+        start = time()
+        # Time out before the agent checks in
+        sleep(1)
+
+        thread.start()
+        commands = agent._long_poll()
+
+        end = time()
+        elapsed_time = end - start
+        assert expected_commands == commands
+        assert elapsed_time == pytest.approx(5.0, abs=1)  # 5 seconds +- a second
+
+        # assert fake_redis_client.llen(queue_key) == 2
+        # assert fake_redis_client.lindex(queue_key, 0).decode() == expected_commands[1]
+        # assert fake_redis_client.lindex(queue_key, 1).decode() == expected_commands[0]
+
+        thread.join()
+
+    def test_long_polling_full_execution_one_cycle(
+        self, agent, fake_dorch, fake_redis_client
+    ):
+        fake_dorch.startup_domains()
+        agent._set_long_poll()
+
+        fake_redis_client.flushall()
+        running_domains = fake_dorch.get_running_domains()
+        assert any(domain == "testing.com" for domain, _ in running_domains)
+        expected_commands = ["echo hello", "echo world"]
+        expected_results = ["hello\n", "world\n"]
+
+        command.queue_commands(
+            domain="testing.com",
+            redis_client=fake_redis_client,
+            commands=expected_commands,
+        )
+
+        queue_key = "testing.com:pending"
+        assert fake_redis_client.llen(queue_key) == 2
+        assert fake_redis_client.lindex(queue_key, 0).decode() == expected_commands[1]
+        assert fake_redis_client.lindex(queue_key, 1).decode() == expected_commands[0]
+
+        sleep(1)
+
+        poll_result = agent.execute_poll_sequence()
+        assert poll_result is True
+
+        sleep(1)
+        stream_key = "testing.com:results"
+
+        stream_length = fake_redis_client.xlen(stream_key)
+        assert stream_length == 2
+
+        entries = fake_redis_client.xrange(stream_key)
+        assert len(entries) == 2
+
+        stream_commands = []
+        stream_results = []
+        for entry_id, fields in entries:
+            stream_commands.append(fields[b"command"].decode())
+            stream_results.append(fields[b"result"].decode())
+            assert fields[b"domain"] == b"testing.com"
+
+        assert set(stream_commands) == set(expected_commands)
+        expected_results = [result.strip() for result in expected_results]
+        assert stream_results == expected_results
+
+        fake_redis_client.flushall()
+
+    def test_long_polling_full_execution_two_cycle(
+        self, agent, fake_dorch, fake_redis_client
+    ):
+        fake_dorch.startup_domains()
+        agent._set_long_poll()
+
+        fake_redis_client.flushall()
+        running_domains = fake_dorch.get_running_domains()
+        assert any(domain == "testing.com" for domain, _ in running_domains)
+        
+        # First cycle commands
+        first_commands = ["echo cycle1", "pwd"]
+        first_expected_results = ["cycle1\n", "/Users/arezkhidr/Desktop/pyWebC2\n"]
+        
+        # Second cycle commands  
+        second_commands = ["echo cycle2", "ls"]
+        
+        # First execution cycle
+        command.queue_commands(
+            domain="testing.com",
+            redis_client=fake_redis_client,
+            commands=first_commands,
+        )
+
+        queue_key = "testing.com:pending"
+        assert fake_redis_client.llen(queue_key) == 2
+
+        sleep(1)
+        poll_result_1 = agent.execute_poll_sequence()
+        assert poll_result_1 is True
+
+        # Second execution cycle
+        command.queue_commands(
+            domain="testing.com",
+            redis_client=fake_redis_client,
+            commands=second_commands,
+        )
+
+        assert fake_redis_client.llen(queue_key) == 2
+
+        sleep(1)
+        poll_result_2 = agent.execute_poll_sequence()
+        assert poll_result_2 is True
+
+        sleep(1)
+        stream_key = "testing.com:results"
+
+        # Should have 4 entries total (2 from each cycle)
+        stream_length = fake_redis_client.xlen(stream_key)
+        assert stream_length == 4
+
+        entries = fake_redis_client.xrange(stream_key)
+        assert len(entries) == 4
+
+        stream_commands = []
+        stream_results = []
+        for entry_id, fields in entries:
+            stream_commands.append(fields[b"command"].decode())
+            stream_results.append(fields[b"result"].decode())
+            assert fields[b"domain"] == b"testing.com"
+
+        # Verify all commands from both cycles are present
+        all_expected_commands = first_commands + second_commands
+        assert set(stream_commands) == set(all_expected_commands)
+
+        # Verify first cycle results are present
+        first_expected_results = [result.strip() for result in first_expected_results]
+        assert any(result == first_expected_results[0] for result in stream_results)
+
+        fake_redis_client.flushall()
+
+    def test_long_polling_with_no_commands_available(
+        self, agent, fake_dorch, fake_redis_client
+    ):
+        fake_dorch.startup_domains()
+        agent._set_long_poll()
+
+        fake_redis_client.flushall()
+        running_domains = fake_dorch.get_running_domains()
+        assert any(domain == "testing.com" for domain, _ in running_domains)
+
+        sleep(1)
+        poll_result = agent.execute_poll_sequence()
+        assert poll_result is False
+
+        stream_key = "testing.com:results"
+        stream_length = fake_redis_client.xlen(stream_key)
+        assert stream_length == 0
+
+    def test_beacon_chain_with_no_commands_available(
+        self, agent, fake_dorch, fake_redis_client
+    ):
+        fake_dorch.startup_domains()
+        agent._set_beacon()
+
+        fake_redis_client.flushall()
+        running_domains = fake_dorch.get_running_domains()
+        assert any(domain == "testing.com" for domain, _ in running_domains)
+
+        sleep(1)
+        beacon_result = agent.execute_beacon_chain()
+        assert beacon_result is False
+
+        stream_key = "testing.com:results"
+        stream_length = fake_redis_client.xlen(stream_key)
+        assert stream_length == 0
+
+    def test_long_polling_with_connection_error(
+        self, agent, fake_dorch, fake_redis_client
+    ):
+        fake_dorch.startup_domains()
+        agent._set_long_poll()
+        agent.activeDomain = "nonexistent.domain"
+
+        fake_redis_client.flushall()
+
+        sleep(1)
+        poll_result = agent.execute_poll_sequence()
+        assert poll_result is False
+
+        stream_key = "testing.com:results"
+        stream_length = fake_redis_client.xlen(stream_key)
+        assert stream_length == 0
+
+    def test_beacon_chain_with_connection_error(
+        self, agent, fake_dorch, fake_redis_client
+    ):
+        fake_dorch.startup_domains()
+        agent._set_beacon()
+        agent.activeDomain = "nonexistent.domain"
+
+        fake_redis_client.flushall()
+
+        sleep(1)
+        beacon_result = agent.execute_beacon_chain()
+        assert beacon_result is False
+
+        stream_key = "testing.com:results"
+        stream_length = fake_redis_client.xlen(stream_key)
+        assert stream_length == 0
+
+    def test_long_polling_with_server_down(
+        self, agent, fake_dorch, fake_redis_client
+    ):
+        fake_dorch.startup_domains()
+        agent._set_long_poll()
+
+        fake_redis_client.flushall()
+        fake_dorch.shutdown_domains()
+
+        sleep(1)
+        poll_result = agent.execute_poll_sequence()
+        assert poll_result is False
+
+        stream_key = "testing.com:results"
+        stream_length = fake_redis_client.xlen(stream_key)
+        assert stream_length == 0
+
+    def test_beacon_chain_with_server_down(
+        self, agent, fake_dorch, fake_redis_client
+    ):
+        fake_dorch.startup_domains()
+        agent._set_beacon()
+
+        fake_redis_client.flushall()
+        fake_dorch.shutdown_domains()
+
+        sleep(1)
+        beacon_result = agent.execute_beacon_chain()
+        assert beacon_result is False
+
+        stream_key = "testing.com:results"
+        stream_length = fake_redis_client.xlen(stream_key)
+        assert stream_length == 0

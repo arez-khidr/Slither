@@ -46,6 +46,11 @@ class TestCommand:
 
         assert commands == ["cd Desktop", "pwd", "ls"]
 
+    def test_get_queued_commands_commands_empty(self, mocker):
+        mock_redis_client = mocker.Mock()
+        mock_redis_client.llen.return_value = 0
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-vv"])
+        commands = get_queued_commands("testing.com", mock_redis_client)
+
+        # Assert that it is an empty lsit, using if statements this will evaluate to None
+        assert commands == []

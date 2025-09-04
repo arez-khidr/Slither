@@ -11,33 +11,46 @@ from domain_orchestrator import DomainOrchestrator
 
 
 class TestDomainOrchestrator:
+    @pytest.mark.unit
     def test_create_domain_already_exists(self, clean_dorch):
-        clean_dorch.domainDictionary = {"test.com": (8000, 123, "running", "2024-01-01")}
+        clean_dorch.domainDictionary = {
+            "test.com": (8000, 123, "running", "2024-01-01")
+        }
         result = clean_dorch.create_domain("test.com", ".com")
         assert result is False
 
+    @pytest.mark.unit
     def test_pause_domain_not_running(self, clean_dorch):
-        clean_dorch.domainDictionary = {"test.com": (8000, None, "paused", "2024-01-01")}
+        clean_dorch.domainDictionary = {
+            "test.com": (8000, None, "paused", "2024-01-01")
+        }
         result = clean_dorch.pause_domain("test.com")
         assert result is False
 
+    @pytest.mark.unit
     def test_pause_domain_not_found(self, clean_dorch):
         result = clean_dorch.pause_domain("nonexistent.com")
         assert result is False
 
+    @pytest.mark.unit
     def test_resume_domain_not_paused(self, clean_dorch):
-        clean_dorch.domainDictionary = {"test.com": (8000, 123, "running", "2024-01-01")}
+        clean_dorch.domainDictionary = {
+            "test.com": (8000, 123, "running", "2024-01-01")
+        }
         result = clean_dorch.resume_domain("test.com")
         assert result is False
 
+    @pytest.mark.unit
     def test_resume_domain_not_found(self, clean_dorch):
         result = clean_dorch.resume_domain("nonexistent.com")
         assert result is False
 
+    @pytest.mark.unit
     def test_remove_domain_not_found(self, clean_dorch):
         result = clean_dorch.remove_domain("nonexistent.com")
         assert result is False
 
+    @pytest.mark.unit
     def test_is_port_available_internal_conflict(self, clean_dorch):
         clean_dorch.domainDictionary = {
             "existing.com": (8000, 123, "running", "2024-01-01")
@@ -45,33 +58,41 @@ class TestDomainOrchestrator:
         assert clean_dorch.is_port_available(8000) is False
         assert clean_dorch.is_port_available(8000, "different.com") is False
 
+    @pytest.mark.unit
     def test_is_port_available_same_domain(self, clean_dorch):
-        clean_dorch.domainDictionary = {"test.com": (8000, 123, "running", "2024-01-01")}
+        clean_dorch.domainDictionary = {
+            "test.com": (8000, 123, "running", "2024-01-01")
+        }
         with patch("socket.socket") as mock_socket:
             mock_socket.return_value.__enter__.return_value.bind.return_value = None
             assert clean_dorch.is_port_available(8000, "test.com") is True
 
+    @pytest.mark.unit
     @patch("socket.socket")
     def test_is_port_available_socket_success(self, mock_socket, clean_dorch):
         mock_socket.return_value.__enter__.return_value.bind.return_value = None
         assert clean_dorch.is_port_available(8000) is True
 
+    @pytest.mark.unit
     @patch("socket.socket")
     def test_is_port_available_socket_failure(self, mock_socket, clean_dorch):
         mock_socket.return_value.__enter__.return_value.bind.side_effect = OSError()
         assert clean_dorch.is_port_available(8000) is False
 
+    @pytest.mark.unit
     def test_find_available_port_success(self, clean_dorch):
         with patch.object(clean_dorch, "is_port_available") as mock_available:
             mock_available.side_effect = [False, False, True]
             port = clean_dorch.find_available_port(start_port=8000)
             assert port == 8002
 
+    @pytest.mark.unit
     def test_find_available_port_none_available(self, clean_dorch):
         with patch.object(clean_dorch, "is_port_available", return_value=False):
             port = clean_dorch.find_available_port(start_port=8000, max_attempts=5)
             assert port is None
 
+    @pytest.mark.unit
     def test_get_running_domains(self, clean_dorch):
         clean_dorch.domainDictionary = {
             "running1.com": (8000, 123, "running", "2024-01-01"),
@@ -86,6 +107,7 @@ class TestDomainOrchestrator:
         assert "running2.com" in running_domains
         assert "paused.com" not in running_domains
 
+    @pytest.mark.unit
     def test_get_paused_domains(self, clean_dorch):
         clean_dorch.domainDictionary = {
             "running.com": (8000, 123, "running", "2024-01-01"),
@@ -100,6 +122,7 @@ class TestDomainOrchestrator:
         assert "paused2.com" in paused_domains
         assert "running.com" not in paused_domains
 
+    @pytest.mark.unit
     def test_get_all_domains(self, clean_dorch):
         original_dict = {
             "test1.com": (8000, 123, "running", "2024-01-01"),
@@ -110,6 +133,7 @@ class TestDomainOrchestrator:
         assert all_domains == original_dict
         assert all_domains is not clean_dorch.domainDictionary
 
+    @pytest.mark.unit
     def test_store_and_load_domains(self, clean_dorch, tmp_path):
         clean_dorch.domainDictionary = {
             "test.com": (8000, 123, "running", "2024-01-01"),
@@ -130,14 +154,18 @@ class TestDomainOrchestrator:
         assert new_orchestrator._load_domains() is True
         assert new_orchestrator.domainDictionary == clean_dorch.domainDictionary
 
+    @pytest.mark.unit
     def test_load_domains_file_not_found(self, clean_dorch, tmp_path):
         # Test with non-existent domain storage file
         result = clean_dorch._load_domains()
         assert result is False
         assert clean_dorch.domainDictionary == {}
 
+    @pytest.mark.unit
     def test_store_domains_creates_valid_json(self, clean_dorch, tmp_path):
-        clean_dorch.domainDictionary = {"test.com": (8000, 123, "running", "2024-01-01")}
+        clean_dorch.domainDictionary = {
+            "test.com": (8000, 123, "running", "2024-01-01")
+        }
         clean_dorch._store_domains()
 
         with open(clean_dorch.domain_storage, "r") as f:
@@ -149,8 +177,11 @@ class TestDomainOrchestrator:
         assert stored_data["test.com"][1] == 123
         assert stored_data["test.com"][2] == "running"
 
+    @pytest.mark.unit
     def test_pause_domain_stores_to_file(self, clean_dorch, tmp_path):
-        clean_dorch.domainDictionary = {"test.com": (8000, 123, "running", "2024-01-01")}
+        clean_dorch.domainDictionary = {
+            "test.com": (8000, 123, "running", "2024-01-01")
+        }
         with (
             patch.object(
                 clean_dorch.wsgi_creator, "is_server_running", return_value=True
@@ -165,8 +196,11 @@ class TestDomainOrchestrator:
         assert stored_data["test.com"][2] == "paused"
         assert stored_data["test.com"][1] is None
 
+    @pytest.mark.unit
     def test_pause_domain_with_resume_flag_stores_to_file(self, clean_dorch, tmp_path):
-        clean_dorch.domainDictionary = {"test.com": (8000, 123, "running", "2024-01-01")}
+        clean_dorch.domainDictionary = {
+            "test.com": (8000, 123, "running", "2024-01-01")
+        }
         with (
             patch.object(
                 clean_dorch.wsgi_creator, "is_server_running", return_value=True
@@ -181,6 +215,7 @@ class TestDomainOrchestrator:
         assert stored_data["test.com"][2] == "resume"
         assert stored_data["test.com"][1] is None
 
+    @pytest.mark.unit
     def test_shutdown_domains_stores_resume_status(self, clean_dorch, tmp_path):
         clean_dorch.domainDictionary = {
             "running1.com": (8000, 123, "running", "2024-01-01"),

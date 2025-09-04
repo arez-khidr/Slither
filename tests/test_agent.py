@@ -19,6 +19,7 @@ class TestAgent:
     # HTTP error occurs - This either is an error OR it simply means that there are no commands avialbale
     # A Request exception occurs
 
+    @pytest.mark.integration
     def test_getting_commands_with_flask_application(
         self, agent, fake_dorch, fake_redis_client
     ):
@@ -50,6 +51,7 @@ class TestAgent:
 
         assert expected_commands == commands
 
+    @pytest.mark.integration
     def test_getting_and_executing_commands_with_flask_application(
         self, agent, fake_dorch, fake_redis_client
     ):
@@ -89,6 +91,7 @@ class TestAgent:
 
         fake_redis_client.flushall()
 
+    @pytest.mark.integration
     def test_getting_and_executing_commands_with_flask_application_and_sending_result(
         self, agent, fake_dorch, fake_redis_client
     ):
@@ -154,6 +157,7 @@ class TestAgent:
 
         fake_redis_client.flushall()
 
+    @pytest.mark.integration
     def test_getting_and_not_executing_commands_with_flask_application(
         self, agent, fake_dorch, fake_redis_client
     ):
@@ -222,6 +226,7 @@ class TestAgent:
 
         fake_redis_client.flushall()
 
+    @pytest.mark.integration
     def test_getting_long_polling_commands_with_flask_application(
         self, agent, fake_dorch, fake_redis_client
     ):
@@ -315,6 +320,7 @@ class TestAgent:
         if thread.is_alive():
             print("Warning: Thread did not complete in time")
 
+    @pytest.mark.integration
     def test_long_polling_full_execution_one_cycle(
         self, agent, fake_dorch, fake_redis_client
     ):
@@ -365,6 +371,7 @@ class TestAgent:
 
         fake_redis_client.flushall()
 
+    @pytest.mark.integration
     def test_long_polling_full_execution_two_cycle(
         self, agent, fake_dorch, fake_redis_client
     ):
@@ -436,6 +443,7 @@ class TestAgent:
 
         fake_redis_client.flushall()
 
+    @pytest.mark.integration
     def test_long_polling_with_no_commands_available(
         self, agent, fake_dorch, fake_redis_client
     ):
@@ -454,6 +462,7 @@ class TestAgent:
         stream_length = fake_redis_client.xlen(stream_key)
         assert stream_length == 0
 
+    @pytest.mark.integration
     def test_beacon_chain_with_no_commands_available(
         self, agent, fake_dorch, fake_redis_client
     ):
@@ -472,6 +481,7 @@ class TestAgent:
         stream_length = fake_redis_client.xlen(stream_key)
         assert stream_length == 0
 
+    @pytest.mark.integration
     def test_long_polling_with_connection_error(
         self, agent, fake_dorch, fake_redis_client
     ):
@@ -489,6 +499,7 @@ class TestAgent:
         stream_length = fake_redis_client.xlen(stream_key)
         assert stream_length == 0
 
+    @pytest.mark.integration
     def test_beacon_chain_with_connection_error(
         self, agent, fake_dorch, fake_redis_client
     ):
@@ -506,6 +517,7 @@ class TestAgent:
         stream_length = fake_redis_client.xlen(stream_key)
         assert stream_length == 0
 
+    @pytest.mark.integration
     def test_long_polling_with_server_down(
         self, agent, fake_dorch, fake_redis_client
     ):
@@ -523,6 +535,7 @@ class TestAgent:
         stream_length = fake_redis_client.xlen(stream_key)
         assert stream_length == 0
 
+    @pytest.mark.integration
     def test_beacon_chain_with_server_down(
         self, agent, fake_dorch, fake_redis_client
     ):

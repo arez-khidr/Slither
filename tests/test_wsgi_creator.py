@@ -33,6 +33,7 @@ class TestWSGICreator:
         )
         yield app
 
+    @pytest.mark.integration
     def test_create_wsgi_app_integration(self, wsgi_creator, fake_app):
         test_port = get_free_port()
 
@@ -53,6 +54,7 @@ class TestWSGICreator:
         wsgi_creator.stop_server_by_port(test_port, "testing.com")
         wsgi_creator.delete_wsgi_files("testing.com")
 
+    @pytest.mark.integration
     def test_create_and_teardown_by_port_integration(self, wsgi_creator, fake_app):
         test_port = get_free_port()
 
@@ -69,6 +71,7 @@ class TestWSGICreator:
         wsgi_creator.delete_wsgi_files("testing.com")
         assert not os.path.exists(wsgi_path)
 
+    @pytest.mark.integration
     def test_is_server_running_integration(self, wsgi_creator, fake_app):
         test_port = get_free_port()
 
@@ -91,6 +94,7 @@ class TestWSGICreator:
 
         assert wsgi_creator.is_server_running(test_port) is False
 
+    @pytest.mark.integration
     def test_restart_server_integration(self, wsgi_creator, fake_app):
         # testing for an appliction that was previously paused, meaning it has an existing wsgi file but not started
         # Create the wsgi file

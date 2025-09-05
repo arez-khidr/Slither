@@ -381,14 +381,14 @@ class TestAgent:
         fake_redis_client.flushall()
         running_domains = fake_dorch.get_running_domains()
         assert any(domain == "testing.com" for domain, _ in running_domains)
-        
+
         # First cycle commands
         first_commands = ["echo cycle1", "pwd"]
         first_expected_results = ["cycle1\n", "/Users/arezkhidr/Desktop/pyWebC2\n"]
-        
-        # Second cycle commands  
+
+        # Second cycle commands
         second_commands = ["echo cycle2", "ls"]
-        
+
         # First execution cycle
         command.queue_commands(
             domain="testing.com",
@@ -518,9 +518,7 @@ class TestAgent:
         assert stream_length == 0
 
     @pytest.mark.integration
-    def test_long_polling_with_server_down(
-        self, agent, fake_dorch, fake_redis_client
-    ):
+    def test_long_polling_with_server_down(self, agent, fake_dorch, fake_redis_client):
         fake_dorch.startup_domains()
         agent._set_long_poll()
 
@@ -536,9 +534,7 @@ class TestAgent:
         assert stream_length == 0
 
     @pytest.mark.integration
-    def test_beacon_chain_with_server_down(
-        self, agent, fake_dorch, fake_redis_client
-    ):
+    def test_beacon_chain_with_server_down(self, agent, fake_dorch, fake_redis_client):
         fake_dorch.startup_domains()
         agent._set_beacon()
 
@@ -552,3 +548,195 @@ class TestAgent:
         stream_key = "testing.com:results"
         stream_length = fake_redis_client.xlen(stream_key)
         assert stream_length == 0
+
+    @pytest.mark.integration
+    def test_getting_agent_modification_commands_with_flask_application(
+        self, agent, fake_dorch, fake_redis_client
+    ):
+        fake_dorch.startup_domains()
+
+        fake_redis_client.flushall()
+        running_domains = fake_dorch.get_running_domains()
+        assert any(domain == "testing.com" for domain, _ in running_domains)
+        expected_modification_commands = [
+            "set_beacon_timer:30",
+            "change_mode:l",
+            "set_domain:backup.com",
+        ]
+
+        # Insert agent modification commands into the domain
+        command.queue_agent_modification_commands(
+            domain="testing.com",
+            redis_client=fake_redis_client,
+            commands=expected_modification_commands,
+        )
+
+        # Assert that the modification commands were added to Redis
+        mod_queue_key = "testing.com:mod_pending"
+        assert fake_redis_client.llen(mod_queue_key) == 3
+        # With lpush + rpop (FIFO): first command pushed is at index 2, last at index 0
+        assert (
+            fake_redis_client.lindex(mod_queue_key, 2).decode()
+            == expected_modification_commands[0]
+        )
+        assert (
+            fake_redis_client.lindex(mod_queue_key, 1).decode()
+            == expected_modification_commands[1]
+        )
+        assert (
+            fake_redis_client.lindex(mod_queue_key, 0).decode()
+            == expected_modification_commands[2]
+        )
+
+        # Have the agent reach out to the domain for modification commands
+        sleep(1)
+
+        agent.modification_check = True  # Set modify mode to allow the call
+        modification_commands = agent.get_modification_commands()
+
+        assert expected_modification_commands == modification_commands
+
+        fake_redis_client.flushall()
+
+    ##TESTING AGENT MODIFICATION COMMANDS ##
+
+    @pytest.mark.unit
+    def test_parse_modification_commands_valid_strings(self, agent):
+        """Test _parse_modification_commands parsing logic only"""
+
+        unparsed_commands = [
+            "set_beacon_timer:120",
+            "watchdog:5000",
+            "kill",
+            "change_mode:l",
+            "domain_add:test.example.com",
+        ]
+
+        parsed_commands = agent._parse_modification_commands(unparsed_commands)
+
+        expected_parsed = [
+            ("set_beacon_timer", "120"),
+            ("watchdog", "5000"),
+            ("kill", None),
+            ("change_mode", "l"),
+            ("domain_add", "test.example.com"),
+        ]
+
+        assert len(parsed_commands) == 5
+
+    @pytest.mark.unit
+    def test_parse_modification_commands_valid_strings_bad_formatting(self, agent):
+        """Test _parse_modification_commands parsing logic only"""
+
+        unparsed_commands = [
+            "set_beacon_timer :   120  ",
+            "   watchdog:5000  ",
+            "kill",
+            "change_mode : l",
+            "domain_add:test.example.com",
+        ]
+
+        parsed_commands = agent._parse_modification_commands(unparsed_commands)
+
+
+        expected_parsed = [
+            ("set_beacon_timer", "120"),
+            ("watchdog", "5000"),
+            ("kill", None),
+            ("change_mode", "l"),
+            ("domain_add", "test.example.com"),
+        ]
+
+        assert len(parsed_commands) == 5
+        assert parsed_commands == expected_parsed
+
+    @pytest.mark.unit
+    def test_handle_modification_command_with_valid_commands(self, agent): 
+        
+        result = agent._handle_modification_command("watchdog", "5000")
+        assert result == "Watchdog timer set to 5000 seconds"
+        assert agent.watchdog_timer == 5000
+        
+        result = agent._handle_modification_command("domain_add", "new.example.com")
+        assert result == "Domain 'new.example.com' added successfully"
+        assert "new.example.com" in agent.domains
+        
+        result = agent._handle_modification_command("beacon", "120")
+        assert result == "Beacon interval set to 120 seconds"
+        assert agent.beacon_inter == 120
+        
+        result = agent._handle_modification_command("change_mode", "l")
+        assert result == "Switched to long-poll mode"
+        assert agent.mode == "l"
+        
+        if "testing.com" not in agent.domains:
+            agent.domains.append("testing.com")
+        result = agent._handle_modification_command("domain_active", "testing.com")
+        assert result == "Active domain set to testing.com"
+        assert agent.activeDomain == "testing.com"
+        
+        if len(agent.domains) <= 1:
+            agent.domains.append("temp.example.com")
+        result = agent._handle_modification_command("domain_remove", "temp.example.com")
+        assert result == "Removed domain: temp.example.com"
+        assert "temp.example.com" not in agent.domains
+        
+        result = agent._handle_modification_command("kill", None)
+        assert result == "Agent terminated"
+        assert agent.stayAlive == False
+    
+    @pytest.mark.unit
+    def test_handle_modification_command_with_invalid_commands(self, agent): 
+        
+        results = []
+        
+        try:
+            agent._handle_modification_command("invalid_command", "value")
+        except Exception as e:
+            results.append(str(e))
+        
+        try:
+            agent._handle_modification_command("nonexistent", "test")
+        except Exception as e:
+            results.append(str(e))
+        
+        try:
+            agent._handle_modification_command("", "value")
+        except Exception as e:
+            results.append(str(e))
+        
+        try:
+            agent._handle_modification_command("watchdog", "invalid")
+        except Exception as e:
+            results.append(str(e))
+        
+        try:
+            agent._handle_modification_command("beacon", "-5")
+        except Exception as e:
+            results.append(str(e))
+        
+        try:
+            agent._handle_modification_command("change_mode", "x")
+        except Exception as e:
+            results.append(str(e))
+        
+        try:
+            agent._handle_modification_command("domain_add", "")
+        except Exception as e:
+            results.append(str(e))
+        
+        try:
+            agent._handle_modification_command("domain_active", "nonexistent.com")
+        except Exception as e:
+            results.append(str(e))
+        
+        assert len(results) == 8
+        assert all(isinstance(result, str) for result in results)
+        assert "Unknown modification command: invalid_command" in results[0]
+        assert "Unknown modification command: nonexistent" in results[1]
+        assert "Unknown modification command: " in results[2]
+
+
+
+                            
+

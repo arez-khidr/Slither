@@ -14,32 +14,89 @@ from time import time
 import redis
 
 
+def queue_agent_modification_commands(
+    domain, redis_client, commands: list[str]
+) -> bool:
+    """Queues command(s) to modify the values of an agent (timer, alive status, domain, etc)"""
+
+    list_key = f"{domain}:mod_pending"
+
+    try:
+        for command in commands:
+            redis_client.lpush(list_key, command)
+        return True
+    except redis.RedisError as e:
+        print(f"Redis error while queuing agent modification commands: {e}")
+        return False
+    except Exception as e:
+        print(f"Unexpected error while queuing agent modification commands: {e}")
+        return False
+
+
+def get_queued_agent_modification_commands(domain, redis_client) -> list[str]:
+    """Returns all the commands that were queued for agent modification"""
+
+    list_key = f"{domain}:mod_pending"
+    commands = []
+
+    try:
+        # Pop all of the commands from the pending list
+        for i in range(redis_client.llen(list_key)):
+            # We pop from the back of the list, executing commands at the back first
+            object = redis_client.rpop(list_key)
+            if object:
+                commands.append(object)
+        return commands
+    except redis.RedisError as e:
+        print(f"Redis error while getting agent modification commands: {e}")
+        return []
+    except Exception as e:
+        print(f"Unexpected error while getting agent modification commands: {e}")
+        return []
+
+
+def validate_agent_modification_commands():
+    """Ensures that the agent modification commands follow a set structure"""
+
+
 def queue_commands(domain, redis_client, commands: list[str]):
     """Queues a command(s) into the redis stream for this given command"""
 
     list_key = f"{domain}:pending"
 
-    for command in commands:
-        redis_client.lpush(list_key, command)
-
-    return True
+    try:
+        for command in commands:
+            redis_client.lpush(list_key, command)
+        return True
+    except redis.RedisError as e:
+        print(f"Redis error while queuing commands: {e}")
+        return False
+    except Exception as e:
+        print(f"Unexpected error while queuing commands: {e}")
+        return False
 
 
 # TODO: In the future we only remove from the list if the command was sucessful (unsure though as there is no "peek")
-
-
 def get_queued_commands(domain: str, redis_client) -> list[str]:
     """Gets all of hte queued commands"""
 
     list_key = f"{domain}:pending"
     commands = []
-    # Pop all of the commands from the pending list
-    for i in range(redis_client.llen(list_key)):
-        # We pop from the back of the list, executing commands at the back first
-        object = redis_client.rpop(list_key)
-        commands.append(object)
 
-    return commands
+    try:
+        # Pop all of the commands from the pending list
+        for i in range(redis_client.llen(list_key)):
+            # We pop from the back of the list, executing commands at the back first
+            object = redis_client.rpop(list_key)
+            if object:
+                commands.append(object)
+        return commands
+    except redis.RedisError as e:
+        print(f"Redis error while getting queued commands: {e}")
+        return []
+    except Exception as e:
+        print(f"Unexpected error while getting queued commands: {e}")
+        return []
 
 
 def insert_HTML_comment(domain, command):

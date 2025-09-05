@@ -238,7 +238,7 @@ class Agent:
 
     def get_modification_commands(self):
         """
-        Agent sends a post request to the agent modification end point and makes changes (any file with the extension .pdf)
+        Agent sends a get request to the agent modification end point and makes changes (any file with the extension .pdf)
         """
 
         if not self.is_modify():
@@ -388,7 +388,7 @@ class Agent:
             "domain_active": lambda v: self.set_new_active_domain(v),
             "beacon": lambda v: self.set_beacon_interval(int(v)),
             "change_mode": lambda v: self.set_mode(v),
-            "kill": lambda: self.kill(),
+            "kill": lambda v: self.kill(),
         }
 
         if cmd_type not in handlers:

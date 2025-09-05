@@ -108,7 +108,7 @@ class WSGICreator:
         """
         Reboot a server from existing WSGI file
 
-        Args:
+        Args
             domain: Domain name to restart
 
         Returns:

@@ -638,7 +638,6 @@ class TestAgent:
 
         parsed_commands = agent._parse_modification_commands(unparsed_commands)
 
-
         expected_parsed = [
             ("set_beacon_timer", "120"),
             ("watchdog", "5000"),
@@ -651,92 +650,84 @@ class TestAgent:
         assert parsed_commands == expected_parsed
 
     @pytest.mark.unit
-    def test_handle_modification_command_with_valid_commands(self, agent): 
-        
+    def test_handle_modification_command_with_valid_commands(self, agent):
         result = agent._handle_modification_command("watchdog", "5000")
         assert result == "Watchdog timer set to 5000 seconds"
         assert agent.watchdog_timer == 5000
-        
+
         result = agent._handle_modification_command("domain_add", "new.example.com")
         assert result == "Domain 'new.example.com' added successfully"
         assert "new.example.com" in agent.domains
-        
+
         result = agent._handle_modification_command("beacon", "120")
         assert result == "Beacon interval set to 120 seconds"
         assert agent.beacon_inter == 120
-        
+
         result = agent._handle_modification_command("change_mode", "l")
         assert result == "Switched to long-poll mode"
         assert agent.mode == "l"
-        
+
         if "testing.com" not in agent.domains:
             agent.domains.append("testing.com")
         result = agent._handle_modification_command("domain_active", "testing.com")
         assert result == "Active domain set to testing.com"
         assert agent.activeDomain == "testing.com"
-        
-        if len(agent.domains) <= 1:
-            agent.domains.append("temp.example.com")
+
+        agent.domains.append("temp.example.com")
         result = agent._handle_modification_command("domain_remove", "temp.example.com")
         assert result == "Removed domain: temp.example.com"
         assert "temp.example.com" not in agent.domains
-        
+
         result = agent._handle_modification_command("kill", None)
         assert result == "Agent terminated"
-        assert agent.stayAlive == False
-    
+        assert agent.stayAlive is False
+
     @pytest.mark.unit
-    def test_handle_modification_command_with_invalid_commands(self, agent): 
-        
+    def test_handle_modification_command_with_invalid_commands(self, agent):
         results = []
-        
+
         try:
             agent._handle_modification_command("invalid_command", "value")
         except Exception as e:
             results.append(str(e))
-        
+
         try:
             agent._handle_modification_command("nonexistent", "test")
         except Exception as e:
             results.append(str(e))
-        
+
         try:
             agent._handle_modification_command("", "value")
         except Exception as e:
             results.append(str(e))
-        
+
         try:
             agent._handle_modification_command("watchdog", "invalid")
         except Exception as e:
             results.append(str(e))
-        
+
         try:
             agent._handle_modification_command("beacon", "-5")
         except Exception as e:
             results.append(str(e))
-        
+
         try:
             agent._handle_modification_command("change_mode", "x")
         except Exception as e:
             results.append(str(e))
-        
+
         try:
             agent._handle_modification_command("domain_add", "")
         except Exception as e:
             results.append(str(e))
-        
+
         try:
             agent._handle_modification_command("domain_active", "nonexistent.com")
         except Exception as e:
             results.append(str(e))
-        
+
         assert len(results) == 8
         assert all(isinstance(result, str) for result in results)
         assert "Unknown modification command: invalid_command" in results[0]
         assert "Unknown modification command: nonexistent" in results[1]
         assert "Unknown modification command: " in results[2]
-
-
-
-                            
-

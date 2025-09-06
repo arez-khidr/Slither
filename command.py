@@ -20,10 +20,13 @@ def queue_agent_modification_commands(
     """Queues command(s) to modify the values of an agent (timer, alive status, domain, etc)"""
 
     list_key = f"{domain}:mod_pending"
+    execution_list_key = f"{domain}:pending"
 
     try:
         for command in commands:
             redis_client.lpush(list_key, command)
+        # Pushes flag into the exection commands
+        redis_client.lpush(execution_list_key, "agent_modification")
         return True
     except redis.RedisError as e:
         print(f"Redis error while queuing agent modification commands: {e}")

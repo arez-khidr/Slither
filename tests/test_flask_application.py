@@ -316,11 +316,17 @@ class TestFlaskApplication:
         self, flask_app, fake_redis_client, tmp_path
     ):
         domain = "test.example.com"
-        modification_commands = ["set_beacon_timer:30", "change_mode:l", "set_domain:backup.com"]
+        modification_commands = [
+            "set_beacon_timer:30",
+            "change_mode:l",
+            "set_domain:backup.com",
+        ]
 
         # Make sure that modification commands are queued into the redis_client
         command.queue_agent_modification_commands(
-            domain=domain, redis_client=fake_redis_client, commands=modification_commands
+            domain=domain,
+            redis_client=fake_redis_client,
+            commands=modification_commands,
         )
 
         # Example url that is called so we can test it (.pdf extension for modification requests)
@@ -360,3 +366,51 @@ class TestFlaskApplication:
             # We expect a 404 response when no modification commands are available
             assert response.status_code == 404
             assert json_data["status"] == "No data available"
+
+    @pytest.mark.integration
+    def test_sending_agent_modification_results(
+        self, flask_app, fake_redis_client, tmp_path
+    ):
+        domain = "test.example.com"
+
+        modification_commands = ["watchdog:5000", "change_mode:l", "kill"]
+
+        command_results = [
+            "Watchdog timer set to 5000 seconds",
+            "Switched to long-poll mode",
+            "Agent terminated",
+        ]
+
+        fake_url = f"https://{domain}/foew/fjewoj/test.gif"
+
+        assert os.path.exists(tmp_path)
+        assert os.path.exists(os.path.join(tmp_path, "index.html"))
+
+        with flask_app.get_app().test_client() as client:
+            response = client.post(
+                fake_url,
+                json={"commands": modification_commands, "results": command_results},
+            )
+
+            json_data = response.get_json()
+            assert response.status_code == 200
+            assert json_data["status"] == "received"
+
+        stream_key = f"{domain}:mod_results"
+        stream_data = fake_redis_client.xread({stream_key: 0})
+
+        assert len(stream_data[0][1]) == 3
+
+        messages = stream_data[0][1]
+
+        assert messages[0][1][b"command"].decode() == modification_commands[0]
+        assert messages[0][1][b"result"].decode() == command_results[0]
+        assert messages[0][1][b"domain"].decode() == domain
+
+        assert messages[1][1][b"command"].decode() == modification_commands[1]
+        assert messages[1][1][b"result"].decode() == command_results[1]
+        assert messages[1][1][b"domain"].decode() == domain
+
+        assert messages[2][1][b"command"].decode() == modification_commands[2]
+        assert messages[2][1][b"result"].decode() == command_results[2]
+        assert messages[2][1][b"domain"].decode() == domain

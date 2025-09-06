@@ -80,10 +80,11 @@ class TestCommand:
                 call("testing.com:mod_pending", "set_beacon_timer:30"),
                 call("testing.com:mod_pending", "change_mode:l"),
                 call("testing.com:mod_pending", "set_domain:backup.com"),
+                call("testing.com:pending", "agent_modification"),
             ]
         )
         
-        assert mock_redis_client.lpush.call_count == 3
+        assert mock_redis_client.lpush.call_count == 4
 
     @pytest.mark.unit
     def test_get_queued_agent_modification_commands(self, mocker):

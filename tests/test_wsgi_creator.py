@@ -13,25 +13,6 @@ from tests.conftest import get_free_port
 
 
 class TestWSGICreator:
-    @pytest.fixture
-    def wsgi_creator(self, tmp_path, fake_redis_client):
-        """Create WSGICreator with test-appropriate parameters"""
-        wsgi_folder = str(tmp_path / "wsgi")
-
-        return WSGICreator(
-            redis_client=fake_redis_client,
-            template_folder=tmp_path,
-            wsgi_folder=wsgi_folder,
-        )
-
-    @pytest.fixture
-    def fake_app(self, tmp_path, fake_redis_client):
-        app = FlaskApplication(
-            domain="testing.com",
-            redis_client=fake_redis_client,
-            template_folder=tmp_path,
-        )
-        yield app
 
     @pytest.mark.integration
     def test_create_wsgi_app_integration(self, wsgi_creator, fake_app):
@@ -112,3 +93,7 @@ class TestWSGICreator:
         time.sleep(2)
 
         assert wsgi_creator.is_server_running(test_port) is True
+        
+        # Cleanup
+        wsgi_creator.stop_server_by_port(test_port, domain)
+        wsgi_creator.delete_wsgi_files(domain)

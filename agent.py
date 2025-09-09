@@ -542,6 +542,7 @@ if __name__ == "__main__":
         # Check to see whether the agent in long polling mode or not
         if agent.is_beacon():
             agent.execute_beacon_chain()
+            time.sleep(5)
             # Set to sleep for the beacon chain
         else:
             # This just needs to constantly be called

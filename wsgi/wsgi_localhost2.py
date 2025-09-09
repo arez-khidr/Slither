@@ -19,7 +19,7 @@ if __name__ == "__main__":
     # Set default arguments for Gunicorn
     sys.argv = [
         'gunicorn',
-        '--bind', '127.0.0.1:8000',
+        '--bind', '127.0.0.1:8003',
         '--workers', '8',
         '--timeout', '10',
         '--max-requests', '1000',

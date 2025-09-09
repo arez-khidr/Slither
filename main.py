@@ -12,6 +12,7 @@ import sys
 
 # Modules that handle the transmission of commands
 import command as c
+import read
 
 # Library to tranlsate timestamps from the messages
 from datetime import datetime
@@ -250,20 +251,20 @@ class PyWebC2Shell:
         domain: str,
         listen: Annotated[
             bool,
-            typer.Option(
-                help="Listen and display any new messages that are sent to the domain"
-            ),
+            typer.Option(help="Listen and diplay the results sent to the domain live"),
         ] = True,
+        modification: Annotated[
+            bool,
+            typer.Option(help="Display the results of agent modification commands"),
+        ] = False,
         history: Annotated[
             int,
             typer.Option(
-                help="Shows the n most previous messages that were sent, by default this sends an entire log"
+                help="Shows the n most previous messages that were sent, by default this sends an entire log of all messages ever sent"
             ),
         ] = 0,
     ):
-        """Reads from a broadcast stream in order to obtain messages for a specific domain"""
-        # List the available streams to lisen to, these are all active domains that are currently running
-        # FIXME: For sure refactor this code such that the redis read functinoality is not all inside of here
+        """Display results from either execution commands or agent modification commands"""
         available_streams = [domain for domain, _ in self.dorch.get_running_domains()]
 
         # Append the 'all' stream, this is a stream that all domains also send their information to
@@ -282,45 +283,18 @@ class PyWebC2Shell:
             return
 
         # After these checks, it is assumed that the user passed in a domain to check, so:
-        stream_name = domain
+        if modification:
+            stream_name = f"{domain}:mod_results"
+        else:
+            stream_name = f"{domain}:results"
 
-        if listen:
-            # Save the original SIGINT handler and temporarily replace with default
-            original_sigint_handler = signal.signal(
-                signal.SIGINT, signal.default_int_handler
-            )
-
-            try:
-                last_id = "$"  # Start from new messages only
-                while True:
-                    # Get new messages from the stream
-                    messages = self.redis_client.xread(
-                        {stream_name: last_id}, count=1, block=1000
-                    )
-
-                    if messages:
-                        for stream, msgs in messages:  # type: ignore
-                            for msg_id, fields in msgs:
-                                # Extract message data, timestamp, and domain
-                                message_data = fields[b"message"].decode("utf-8")
-                                timestamp = float(fields[b"ts"].decode("utf-8"))
-                                domain = fields[b"domain"].decode("utf-8")
-
-                                # Format timestamp
-                                formatted_time = datetime.fromtimestamp(
-                                    timestamp
-                                ).strftime("%Y-%m-%d %H:%M:%S")
-
-                                # Display with timestamp and domain
-                                print(f"[{formatted_time}] [{domain}] {message_data}")
-
-                                last_id = msg_id
-
-            except KeyboardInterrupt:
-                print(f"\nStopped listeningto broadcast stream '{stream_name}'")
-            finally:
-                # Restore the original SIGINT handler
-                signal.signal(signal.SIGINT, original_sigint_handler)
+        if history >= 0:
+            # History flag was provided - override listen behavior
+            # Pass count=0 to show all messages, or count=history for specific number
+            read.read_last_n_entries(self.redis_client, stream_name, history)
+        elif listen:
+            # Read from stream in real-time
+            read.read_live_stream(self.redis_client, stream_name)
 
     def run(self):
         """Runs the typer app as we are calling it inside of a class"""

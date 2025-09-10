@@ -306,12 +306,6 @@ class TestFlaskApplication:
         assert messages[1][1][b"result"].decode() == command_results[1]
 
     @pytest.mark.integration
-    def test_sending_long_polling_results_with_no_commands(
-        self, flask_app, fake_redis_client
-    ):
-        pass
-
-    @pytest.mark.integration
     def test_agent_modification_request_with_available_commands_integration(
         self, flask_app, fake_redis_client, tmp_path
     ):

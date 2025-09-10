@@ -80,6 +80,32 @@ class WSGICreator:
             print(f"Error stopping processes on port {port}: {e}")
             return False
 
+    def stop_server_by_pid(self, pid):
+        """
+        Stops the Gunicorn server based on the process ID of the python interpreter that is running its associated file
+
+        Args:
+            pid: Process ID of the Python script that started the Gunicorn server
+
+        Returns:
+            bool: True if successfully stopped, False otherwise
+        """
+
+        try:
+            # Kill the entire process group since we used start_new_session=True
+            os.killpg(pid, signal.SIGTERM)
+            print(f"Sent SIGTERM to process group {pid}")
+            return True
+        except ProcessLookupError:
+            print(f"Process {pid} not found - may already be terminated")
+            return True  # Consider this success since the process is gone
+        except PermissionError:
+            print(f"Permission denied killing process {pid}")
+            return False
+        except Exception as e:
+            print(f"Error stopping server with PID {pid}: {e}")
+            return False
+
     def is_server_running(self, port):
         """
         Check if a server is running on the specified port
@@ -94,10 +120,6 @@ class WSGICreator:
             result = subprocess.run(
                 ["lsof", "-ti", f":{port}"], capture_output=True, text=True
             )
-            # print(f"Return code: {result.returncode}")
-            # print(f"Stdout: '{result.stdout}'")
-            # print(f"Stdout stripped: '{result.stdout.strip()}'")
-            # print(f"Final result: {result.returncode == 0 and result.stdout.strip()}")
             return result.returncode == 0 and bool(result.stdout.strip())
         except FileNotFoundError:
             return False
@@ -201,6 +223,7 @@ if __name__ == "__main__":
         '--max-requests', '1000',
         '--access-logfile', '-',
         '--error-logfile', '-',
+        '--graceful-timeout', '3', 
         'wsgi_{safe_domain}:app'
     ]
     

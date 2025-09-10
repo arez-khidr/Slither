@@ -175,20 +175,17 @@ class TestAgent:
             "ls /nonexistent/directory",
         ]
 
-        # Insert failing commands into the domain
         command.queue_commands(
             domain="testing.com",
             redis_client=fake_redis_client,
             commands=failing_commands,
         )
 
-        # Assert that the commands were added to Redis
         queue_key = "testing.com:pending"
         assert fake_redis_client.llen(queue_key) == 2
         assert fake_redis_client.lindex(queue_key, 0).decode() == failing_commands[1]
         assert fake_redis_client.lindex(queue_key, 1).decode() == failing_commands[0]
 
-        # Have the agent reach out to the domain
         sleep(1)
 
         # Run the beacon chain - commands should be received but execution will fail

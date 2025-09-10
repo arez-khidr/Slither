@@ -5,11 +5,12 @@ import socket
 import fakeredis
 import redis
 from threading import Thread
+from time import sleep
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from domain_orchestrator import DomainOrchestrator
-from agent import Agent
+from agent.agent import Agent
 from flask_application import FlaskApplication
 from wsgi_creator import WSGICreator
 
@@ -81,6 +82,8 @@ def clean_dorch(tmp_path, fake_redis_client):
     except Exception as e:
         print(f"Warning: Failed to remove domains during cleanup: {e}")
 
+    sleep(4)
+
 
 @pytest.fixture
 def fake_dorch(tmp_path, fake_redis_client):
@@ -112,6 +115,9 @@ def fake_dorch(tmp_path, fake_redis_client):
             fake_dorch.remove_domain(domain)
     except Exception as e:
         print(f"Warning: Failed to remove domains during cleanup: {e}")
+
+    # Making sure that everything shuts down :wsgi_folder
+    sleep(4)
 
 
 @pytest.fixture

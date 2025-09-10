@@ -124,7 +124,7 @@ class DomainOrchestrator:
 
         # Stop the WSGI server if running
         if status == "running" and self.wsgi_creator.is_server_running(port):
-            self.wsgi_creator.stop_server_by_port(port, domain)
+            self.wsgi_creator.stop_server_by_pid(pid)
 
         # Remove nginx configuration
         nginx_controller = self.nginx_controller
@@ -165,7 +165,7 @@ class DomainOrchestrator:
 
         # Stop the server process
         if self.wsgi_creator.is_server_running(port):
-            self.wsgi_creator.stop_server_by_port(port, domain)
+            self.wsgi_creator.stop_server_by_pid(pid)
 
         if resume:
             self.domainDictionary[domain] = (port, None, "resume", date_created)

@@ -68,12 +68,6 @@ class FlaskApplication:
         def home():
             return render_template("index.html", domain=self.domain)
 
-        @self.app.route("/health", methods=["GET"])
-        def health():
-            return jsonify(
-                {"status": "healthy", "domain": self.domain, "app": "flask_application"}
-            )
-
         @self.app.route("/<path:filename>.woff", methods=["GET"])
         def handle_beacon_command_request(filename):
             """Obtains any commands that have been queued"""
@@ -232,18 +226,10 @@ class FlaskApplication:
                     status="no results or commands provided",
                 )
 
-        @self.app.route("/results", methods=["POST"])
-        def reportChunk():
-            """
-            Upon a POST request to /results, processes given chunks of the message,
-            see _send_results() in agent.py to see message format
-            """
-            data = request.get_json()
-
-            self._redis_stream_push(data)
-
-            # Return status required for Flask
-            return jsonify(status="ok"), 200
+    def generate_nonce(self):
+        """
+        Generates a nonce value to be utilized with an agent, nonce value
+        """
 
     def _redis_push_results(self, results, commands, stream_key):
         """

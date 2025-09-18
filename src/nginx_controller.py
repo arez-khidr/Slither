@@ -58,7 +58,7 @@ class NGINXController:
     }}
     
     location /static/ {{
-        root /Users/arezkhidr/Desktop/pyWebC2;
+        root {os.path.dirname(os.path.dirname(os.path.abspath(__file__)))};
         expires 30d;
         add_header Cache-Control "public, immutable";
     }}
@@ -91,7 +91,7 @@ class NGINXController:
         try:
             # TODO: Add a better print statement such to warn the user for the reason why thye are being asked to input a password
             # Remove local nginx file
-            local_file = f"nginx/nginx_{domain}.conf"
+            local_file = f"{self.nginx_conf_path}/nginx_{domain}.conf"
             if os.path.exists(local_file):
                 os.remove(local_file)
                 print(f"Deleted local nginx config: {local_file}")

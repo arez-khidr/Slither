@@ -7,7 +7,7 @@ import redis
 from threading import Thread
 from time import sleep
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
 
 from domain_orchestrator import DomainOrchestrator
 from agent.agent import Agent

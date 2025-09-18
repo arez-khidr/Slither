@@ -23,9 +23,9 @@ class DomainOrchestrator:
         self,
         domain_storage: str = "domains.json",
         redis_client=redis.Redis(),
-        template_folder=None,
-        wsgi_folder: str = "wsgi",
-        nginx_conf_folder: str = "nginx",
+        template_folder="../templates",
+        wsgi_folder: str = "../wsgi",
+        nginx_conf_folder: str = "../nginx",
     ):
         """Creates the domain orchestrator object with the following parameters
         Args:
@@ -131,7 +131,7 @@ class DomainOrchestrator:
         nginx_controller.remove_nginx_path(domain)
 
         # Delete the website template files
-        template_dir = f"templates/{domain}"
+        template_dir = f"../templates/{domain}"
         if os.path.exists(template_dir):
             # Remove the directory and all its contents
             shutil.rmtree(template_dir)

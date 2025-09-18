@@ -62,8 +62,6 @@ class FlaskApplication:
     def _setup_routes(self):
         """Setup all routes for the Flask application"""
 
-        # NOTE: Inspired by sliver and how they utilize different file extensions and endpoints to configure different commands, we do the same here. Below is our structure
-
         @self.app.route("/", methods=["GET"])
         def home():
             return render_template("index.html", domain=self.domain)
@@ -231,19 +229,6 @@ class FlaskApplication:
                 return jsonify(
                     status="no results or commands provided",
                 )
-
-        @self.app.route("/results", methods=["POST"])
-        def reportChunk():
-            """
-            Upon a POST request to /results, processes given chunks of the message,
-            see _send_results() in agent.py to see message format
-            """
-            data = request.get_json()
-
-            self._redis_stream_push(data)
-
-            # Return status required for Flask
-            return jsonify(status="ok"), 200
 
     def _redis_push_results(self, results, commands, stream_key):
         """

@@ -194,20 +194,20 @@ class WSGICreator:
         print(f"This is the redis_port {redis_port} ")
 
         # Get absolute path to project directory this is needed during testing so the flask_application class can be found
-        project_dir = os.path.dirname(os.path.abspath(__file__))
+        project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
         wsgi_content = f"""# Import the FlaskApplication class
 import sys
 import os
 import redis
-sys.path.append('{project_dir}')
+sys.path.append('{project_dir}/src')
 from flask_application import FlaskApplication
 
 # Create Redis client using same connection info as parent
 redis_client = redis.Redis(host='{redis_host}', port={redis_port})
 
 # Create a Flask application instance for {domain} domain
-flask_app_instance = FlaskApplication('{domain}', redis_client, '{self.template_folder}')
+flask_app_instance = FlaskApplication('{domain}', redis_client, '{self.template_folder}/{domain}')
 app = flask_app_instance.get_app()
 
 if __name__ == "__main__":

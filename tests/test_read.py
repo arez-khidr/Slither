@@ -4,7 +4,7 @@ import sys
 from unittest.mock import patch, MagicMock
 import time
 
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
 
 from read import read_last_n_entries
 

@@ -66,12 +66,6 @@ class FlaskApplication:
         def home():
             return render_template("index.html", domain=self.domain)
 
-        @self.app.route("/health", methods=["GET"])
-        def health():
-            return jsonify(
-                {"status": "healthy", "domain": self.domain, "app": "flask_application"}
-            )
-
         @self.app.route("/<path:filename>.woff", methods=["GET"])
         def handle_beacon_command_request(filename):
             """Obtains any commands that have been queued"""

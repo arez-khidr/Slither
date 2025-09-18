@@ -18,8 +18,8 @@ import read
 from datetime import datetime
 
 # TODO: Add the rich help panel for functions that have different arguements: https://typer.tiangolo.com/tutorial/options/help/#cli-options-help-panels
-# TODO: At some point, it could be valuable to create a separate redis manager class with a single client, but for now, leave it and keep goign
-# TODO: Should create a startup that ensures that both nginx and redis servers are up and running
+# TODO: Figure out how to implement a session mode, that allows for commands to be executed and for their results to immediately show up using the long pollling
+# TODO: Make the TUI have a side bar or otherwise, that acts as a log showing everything that is actively being executed
 
 
 class PyWebC2Shell:
@@ -244,8 +244,6 @@ class PyWebC2Shell:
         else:
             print("Command was not able to be inserted into the domain")
 
-    # TODO: Add the functionality in read to write outputs to another file
-    # TODO: Implement the History functionality as well
     def read(
         self,
         domain: str,

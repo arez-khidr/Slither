@@ -13,7 +13,6 @@ from tests.conftest import get_free_port
 
 
 class TestWSGICreator:
-
     @pytest.mark.integration
     def test_create_wsgi_app_integration(self, wsgi_creator, fake_app):
         test_port = get_free_port()
@@ -46,8 +45,34 @@ class TestWSGICreator:
 
         assert os.path.exists(wsgi_path)
 
-        result = wsgi_creator.stop_server_by_port(test_port, "testing.com")
-        assert result is True
+        wsgi_creator.stop_server_by_port(test_port, "testing.com")
+
+        lsof_result = subprocess.run(
+            ["lsof", "-ti", f":{test_port}"], capture_output=True, text=True
+        )
+        assert lsof_result.returncode != 0 or not lsof_result.stdout.strip()
+
+        wsgi_creator.delete_wsgi_files("testing.com")
+        assert not os.path.exists(wsgi_path)
+
+    @pytest.mark.integration
+    def test_create_and_teardown_by_pid_integration(self, wsgi_creator, fake_app):
+        test_port = get_free_port()
+
+        pid = wsgi_creator.create_wsgi_server(
+            app=fake_app.get_app(), port=test_port, workers=4
+        )
+        wsgi_path = f"{wsgi_creator.wsgi_folder}/wsgi_testing_com.py"
+
+        assert os.path.exists(wsgi_path)
+        assert isinstance(pid, int)
+
+        wsgi_creator.stop_server_by_pid(pid)
+        
+        lsof_result = subprocess.run(
+            ["lsof", "-ti", f":{test_port}"], capture_output=True, text=True
+        )
+        assert lsof_result.returncode != 0 or not lsof_result.stdout.strip()
 
         wsgi_creator.delete_wsgi_files("testing.com")
         assert not os.path.exists(wsgi_path)
@@ -93,7 +118,7 @@ class TestWSGICreator:
         time.sleep(2)
 
         assert wsgi_creator.is_server_running(test_port) is True
-        
+
         # Cleanup
         wsgi_creator.stop_server_by_port(test_port, domain)
         wsgi_creator.delete_wsgi_files(domain)

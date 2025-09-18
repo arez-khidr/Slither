@@ -1,0 +1,306 @@
+{
+  "url_extensions": {
+    "common_paths": [
+      "/assets",
+      "/resources",
+      "/content", 
+      "/media",
+      "/public",
+      "/dist",
+      "/build",
+      "/cdn",
+      "/files",
+      "/data",
+      "/api/v1",
+      "/api/v2",
+      "/api",
+      "/lib",
+      "/libs",
+      "/vendor",
+      "/themes",
+      "/templates",
+      "/uploads"
+    ],
+    "random_segments": [
+      "a8f9d2c1",
+      "x7b3e9f2", 
+      "m4k8j3n7",
+      "p9q2w5r8",
+      "z1v6c4n9",
+      "h5t7y2u3",
+      "g8j4k6l1",
+      "b3n5m8x2",
+      "f7d9s4a6",
+      "r2t8y5u1",
+      "cache_v2",
+      "bundle_min",
+      "compressed",
+      "optimized",
+      "latest",
+      "production",
+      "release",
+      "deploy"
+    ]
+  },
+  "url_parameters": {
+    "common_params": [
+      "v",
+      "version", 
+      "cache",
+      "t",
+      "timestamp",
+      "id",
+      "ref",
+      "token",
+      "key",
+      "hash",
+      "build",
+      "rev",
+      "nocache",
+      "bust",
+      "format",
+      "quality",
+      "size",
+      "w",
+      "h",
+      "dpi"
+    ],
+    "timestamp_values": [
+      "1641234567",
+      "1659876543", 
+      "1672345678",
+      "1685432109",
+      "1698765432",
+      "1701234567"
+    ],
+    "version_values": [
+      "1.2.3",
+      "2.4.1",
+      "3.1.0", 
+      "1.0.15",
+      "2.3.7",
+      "4.0.2"
+    ],
+    "hash_values": [
+      "a1b2c3d4e5f6",
+      "f9e8d7c6b5a4",
+      "1a2b3c4d5e6f",
+      "9z8y7x6w5v4u",
+      "p9o8i7u6y5t4",
+      "m1n2b3v4c5x6"
+    ]
+  },
+  "file_extensions": {
+    ".woff": {
+      "paths": [
+        "/assets/fonts",
+        "/resources/typography",
+        "/fonts",
+        "/webfonts",
+        "/assets/typefaces",
+        "/cdn/fonts",
+        "/lib/fonts",
+        "/themes/fonts"
+      ],
+      "params": [
+        "?display=swap",
+        "?v=1.2.3",
+        "?font-display=swap",
+        "?subset=latin",
+        "?cache=86400",
+        "?format=woff",
+        "?weight=400",
+        "?style=normal",
+        "?family=sans-serif"
+      ],
+      "filenames": [
+        "opensans-regular",
+        "roboto-medium", 
+        "arial-bold",
+        "helvetica-light",
+        "inter-variable",
+        "sourcesans-regular",
+        "lato-normal",
+        "montserrat-semibold",
+        "poppins-medium",
+        "nunito-regular"
+      ]
+    },
+    ".css": {
+      "paths": [
+        "/assets/css",
+        "/resources/styles", 
+        "/css",
+        "/styles",
+        "/assets/styles",
+        "/cdn/css",
+        "/lib/css",
+        "/themes/styles"
+      ],
+      "params": [
+        "?v=2.1.4",
+        "?cache=3600", 
+        "?minified=true",
+        "?t=1672345678",
+        "?bust=a1b2c3",
+        "?compress=gzip",
+        "?build=prod",
+        "?theme=default",
+        "?rev=f9e8d7"
+      ],
+      "filenames": [
+        "main.min",
+        "app",
+        "bootstrap.min",
+        "style",
+        "theme-default", 
+        "custom",
+        "responsive",
+        "components",
+        "layout",
+        "utilities"
+      ]
+    },
+    ".png": {
+      "paths": [
+        "/assets/images",
+        "/resources/graphics",
+        "/images", 
+        "/img",
+        "/assets/pics",
+        "/cdn/images",
+        "/media/photos",
+        "/uploads/images"
+      ],
+      "params": [
+        "?w=800&h=600",
+        "?quality=85",
+        "?format=png",
+        "?dpi=144",
+        "?compress=true",
+        "?cache=7200", 
+        "?size=medium",
+        "?optimize=true",
+        "?v=1.0.3",
+        "?t=1685432109"
+      ],
+      "filenames": [
+        "hero-banner",
+        "logo-header",
+        "background-pattern",
+        "icon-sprite",
+        "product-image",
+        "thumbnail",
+        "avatar-default",
+        "placeholder",
+        "feature-graphic",
+        "social-preview"
+      ]
+    },
+    ".js": {
+      "paths": [
+        "/assets/js",
+        "/resources/scripts",
+        "/js",
+        "/scripts",
+        "/assets/scripts",
+        "/cdn/js",
+        "/lib/js",
+        "/vendor/js"
+      ],
+      "params": [
+        "?v=3.2.1",
+        "?defer=true",
+        "?async=true", 
+        "?minified=true",
+        "?cache=1800",
+        "?bundle=app",
+        "?t=1698765432",
+        "?build=release",
+        "?chunk=main"
+      ],
+      "filenames": [
+        "app.bundle.min",
+        "main",
+        "jquery.min", 
+        "bootstrap.min",
+        "custom",
+        "components",
+        "vendor.bundle",
+        "runtime",
+        "polyfills",
+        "analytics"
+      ]
+    },
+    ".pdf": {
+      "paths": [
+        "/assets/documents",
+        "/resources/files",
+        "/documents",
+        "/docs", 
+        "/files",
+        "/assets/pdfs",
+        "/downloads",
+        "/media/docs"
+      ],
+      "params": [
+        "?download=true",
+        "?view=inline", 
+        "?version=latest",
+        "?rev=2.1.0",
+        "?cache=false",
+        "?attachment=true",
+        "?format=pdf",
+        "?compress=true",
+        "?t=1701234567"
+      ],
+      "filenames": [
+        "user-manual",
+        "technical-spec",
+        "whitepaper", 
+        "datasheet",
+        "report-2024",
+        "documentation",
+        "guide",
+        "terms-of-service",
+        "privacy-policy",
+        "api-reference"
+      ]
+    },
+    ".gif": {
+      "paths": [
+        "/assets/images",
+        "/resources/animations",
+        "/images/gif",
+        "/img/animated",
+        "/assets/graphics",
+        "/cdn/images",
+        "/media/animations",
+        "/uploads/gifs"
+      ],
+      "params": [
+        "?loop=infinite", 
+        "?autoplay=true",
+        "?quality=medium",
+        "?optimize=true",
+        "?compress=true",
+        "?cache=3600",
+        "?format=gif",
+        "?size=small",
+        "?v=1.1.2"
+      ],
+      "filenames": [
+        "loading-spinner",
+        "progress-bar",
+        "animation-demo", 
+        "icon-animated",
+        "banner-rotating",
+        "slideshow",
+        "transition-effect",
+        "loader",
+        "status-indicator",
+        "interactive-demo"
+      ]
+    }
+  }
+}

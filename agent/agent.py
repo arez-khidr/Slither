@@ -11,6 +11,7 @@ import requests
 import subprocess
 from typing import List
 
+
 # TODO: Make it such that the agent sends using a protobuf, rather than a json, using json for now as honestly it is just easier. I ain't trying to be an attacker
 # TODO: Make it so that there is a timer or handler to swtich to an alternate domain if this domain is not response
 # TODO: Make it such that a command list can specify whether or not a response should be sent back!

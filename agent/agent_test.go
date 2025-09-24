@@ -63,7 +63,7 @@ func (suite *AgentTestSuite) TestSetBeaconInterWithSmallInt() {
 var testConfigFile []byte
 
 func (suite *AgentTestSuite) TestExtractAndCreateAgent() {
-	agent, _, err := ExtractAndCreateAgent()
+	agent, _, err := ExtractAndCreateAgent(testConfigFile)
 	assert.NoError(suite.T(), err)
 	assert.NotNil(suite.T(), agent)
 
@@ -76,7 +76,7 @@ func (suite *AgentTestSuite) TestExtractAndCreateAgent() {
 }
 
 func (suite *AgentTestSuite) TestURLParameters() {
-	ac, err := extractAgentConfig()
+	ac, err := extractAgentConfig(testConfigFile)
 	assert.NoError(suite.T(), err)
 	assert.NotNil(suite.T(), ac)
 
@@ -106,6 +106,30 @@ func (suite *AgentTestSuite) TestURLParameters() {
 	assert.True(suite.T(), exists)
 	assert.Contains(suite.T(), jsConfig.Paths, "/assets/js")
 	assert.Contains(suite.T(), jsConfig.Filenames, "app.bundle.min")
+}
+
+func (suite *AgentTestSuite) TestGenerateURL() {
+	ac, err := extractAgentConfig(testConfigFile)
+	assert.NoError(suite.T(), err)
+	assert.NotNil(suite.T(), ac)
+
+	url, err := generateURL(suite.agent, ac, ".woff")
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), url)
+
+	assert.Contains(suite.T(), url, "http://")
+	assert.Contains(suite.T(), url, suite.agent.activeDomain)
+	assert.Contains(suite.T(), url, ".woff")
+
+	cssURL, err := generateURL(suite.agent, ac, ".css")
+	assert.NoError(suite.T(), err)
+	assert.NotEmpty(suite.T(), cssURL)
+	assert.Contains(suite.T(), cssURL, ".css")
+
+	invalidURL, err := generateURL(suite.agent, ac, ".invalid")
+	assert.Error(suite.T(), err)
+	assert.Empty(suite.T(), invalidURL)
+	assert.EqualError(suite.T(), err, "not a valid extension or does not exist in the config")
 }
 
 // Required test to be able to run beforehand using the testing module that is native to go

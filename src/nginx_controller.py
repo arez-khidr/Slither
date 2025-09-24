@@ -120,6 +120,19 @@ class NGINXController:
             local_file = f"{self.nginx_conf_path}/nginx_{domain}.conf"
             server_file = f"{self.nginx_servers_path}nginx_{domain}.conf"
 
+            # Create servers directory if it doesn't exist
+            if not os.path.exists(self.nginx_servers_path):
+                mkdir_result = subprocess.run(
+                    ["sudo", "mkdir", "-p", self.nginx_servers_path],
+                    capture_output=True,
+                    text=True,
+                )
+                if mkdir_result.returncode != 0:
+                    print(f"Failed to create servers directory: {mkdir_result.stderr}")
+                    return False
+                else:
+                    print(f"Created servers directory: {self.nginx_servers_path}")
+
             copy_result = subprocess.run(
                 ["sudo", "cp", local_file, server_file], capture_output=True, text=True
             )

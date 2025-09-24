@@ -50,13 +50,6 @@ class TestDomainOrchestrator:
         result = clean_dorch.remove_domain("nonexistent.com")
         assert result is False
 
-    # @pytest.mark.unit
-    # def test_remove_domain_paused(self, clean_dorch):
-    #
-    # @pytest.mark.unit
-    # def test_remove_domain_resume(self, clean_dorch):
-    #
-
     @pytest.mark.unit
     def test_is_port_available_internal_conflict(self, clean_dorch):
         clean_dorch.domainDictionary = {

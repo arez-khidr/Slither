@@ -132,6 +132,45 @@ func (suite *AgentTestSuite) TestGenerateURL() {
 	assert.EqualError(suite.T(), err, "not a valid extension or does not exist in the config")
 }
 
+func (suite *AgentTestSuite) TestCommandExecution() {
+	result := executeCommand(suite.agent, "echo hello")
+	assert.Contains(suite.T(), result, "hello")
+
+	result = executeCommand(suite.agent, "echo test message")
+	assert.Contains(suite.T(), result, "test message")
+
+	result = executeCommand(suite.agent, "")
+	assert.Equal(suite.T(), "Error: empty command", result)
+
+	result = executeCommand(suite.agent, "nonexistentcommand12345")
+	assert.NotEmpty(suite.T(), result)
+	assert.NotContains(suite.T(), result, "hello")
+
+	commands := []string{"echo first", "echo second", "echo third"}
+	results := executeCommands(suite.agent, commands)
+	assert.Len(suite.T(), results, 3)
+	assert.Contains(suite.T(), results[0], "first")
+	assert.Contains(suite.T(), results[1], "second")
+	assert.Contains(suite.T(), results[2], "third")
+}
+
+func (suite *AgentTestSuite) TestCheckForModificationFlag() {
+	assert.False(suite.T(), isModify(suite.agent))
+
+	commandsWithFlag := []string{"echo hello", "agent_modification", "ls"}
+	modificationFlagCheck(suite.agent, commandsWithFlag)
+	assert.True(suite.T(), isModify(suite.agent))
+	assert.NotContains(suite.T(), commandsWithFlag, "agent_modification")
+	assert.Len(suite.T(), commandsWithFlag, 2)
+
+	suite.agent.modificationCheck = false
+
+	commandsWithoutFlag := []string{"echo hello", "ls", "pwd"}
+	modificationFlagCheck(suite.agent, commandsWithoutFlag)
+	assert.False(suite.T(), isModify(suite.agent))
+	assert.Len(suite.T(), commandsWithoutFlag, 3)
+}
+
 // Required test to be able to run beforehand using the testing module that is native to go
 func TestExampleTestSuite(t *testing.T) {
 	suite.Run(t, new(AgentTestSuite))

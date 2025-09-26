@@ -18,8 +18,8 @@ import read
 from datetime import datetime
 
 # TODO: Add the rich help panel for functions that have different arguements: https://typer.tiangolo.com/tutorial/options/help/#cli-options-help-panels
-# TODO: Figure out how to implement a session mode, that allows for commands to be executed and for their results to immediately show up using the long pollling
-# TODO: Make the TUI have a side bar or otherwise, that acts as a log showing everything that is actively being executed
+# TODO: Make the TUI have a side bar or otherwise, that acts as a log showing everything that is actively being executed (THis could maybe be done in go using bubble tea long term if I feel like it )
+# TODO: Make it such that session durations can be set, or taking an agent out of a session mode is easier. Still need to work on making the session mode more interactive
 
 
 class PyWebC2Shell:

@@ -40,6 +40,20 @@ func (suite *AgentIntegrationTestSuite) TestBeaconIn() {
 	assert.Equal(suite.T(), expectCommands, commands, "expectedcommands do not match recieved commands")
 }
 
+func (suite *AgentIntegrationTestSuite) TestBeaconOut() {
+	commands := []string{"echo hello", "echo fart"}
+	results := []string{"hello", "fart"}
+	result, err := beaconOut(suite.agent, suite.config, commands, results)
+	assert.NoError(suite.T(), err, "beaconOut threw an error")
+	assert.True(suite.T(), result)
+	// The validation that the command was recieved is handled in the python tests
+}
+
+func (suite *AgentIntegrationTestSuite) TestBeaconCycle() {
+	status := executeBeaconChain(suite.agent, suite.config)
+	assert.True(suite.T(), status)
+}
+
 // Required test to be able to run beforehand using the testing module that is native to go
 func TestAgentIntegrationTestSuite(t *testing.T) {
 	suite.Run(t, new(AgentIntegrationTestSuite))
